@@ -180,7 +180,6 @@ impl Node {
         }
     }
 
-
     fn size(&self, node_manager: &NodeManager)  -> usize {
         if self.size.is_some() {
             self.size.unwrap()
