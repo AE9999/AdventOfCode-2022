@@ -5,10 +5,14 @@ use std::env;
 
 fn main() ->  io::Result<()> {
     let args: Vec<String> = env::args().collect();
-    let rope_movments = read_input(&args[1])?;
+    let rope_movements = read_input(&args[1])?;
 
     println!("{:?} positions does the tail of the rope visit at least once.",
-             solve1(&rope_movments));
+             solve1(&rope_movements));
+
+    println!("{:?} positions does the tail of the rope visit at least once.",
+             solve2(&rope_movements));
+
     Ok(())
 }
 
@@ -30,62 +34,86 @@ fn solve1(rope_movements: &Vec<RopeMovement>) -> usize {
     let mut position_tail = Point::new(0,0);
 
     visited_tail_positions.insert(position_tail.clone());
-    
+
     for rope_movement in rope_movements {
         for _step in 0..(rope_movement.amount) {
             position_head.move_step(&rope_movement.direction);
-
-            let distance_x = (position_head.x - position_tail.x).abs();
-            let distance_y = (position_head.y - position_tail.y).abs();
-
-            let directions_tail: Option<Vec<char>> =
-                // If the head is ever two steps directly up, down, left, or right from the tail,
-                // the tail must also move one step in that direction so it remains close enough:
-                if distance_x == 0 && distance_y == 2 {
-                    if position_head.y >  position_tail.y {
-                        Some(vec!('U'))
-                    } else {
-                        Some(vec!('D'))
-                    }
-                }
-                else if distance_x == 2 && distance_y == 0 {
-                    if position_head.x >  position_tail.x {
-                        Some(vec!('R'))
-                    } else {
-                        Some(vec!('L'))
-                    }
-                }
-                // Otherwise, if the head and tail aren't touching and aren't in the same row or column,
-                // the tail always moves one step diagonally to keep up:
-                else if (distance_x >= 1 && distance_y >= 1) && !(distance_x == 1 && distance_y == 1) {
-                    let mut directions_tail: Vec<char> = Vec::new();
-                    if position_head.x > position_tail.x {
-                        directions_tail.push('R')
-                    } else {
-                        directions_tail.push('L')
-                    }
-                    if position_head.y > position_tail.y {
-                        directions_tail.push('U')
-                    } else {
-                        directions_tail.push('D')
-                    }
-                    Some(directions_tail)
-                } else {
-                    None
-                }
-            ;
-
-            if directions_tail.is_some() {
-                for direction in directions_tail.unwrap() {
-                    position_tail.move_step(&direction)
-                }
-                visited_tail_positions.insert(position_tail.clone());
-            }
+            propagate_move(&mut position_head, &mut position_tail);
+            visited_tail_positions.insert(position_tail.clone());
         }
     }
 
 
     visited_tail_positions.len()
+}
+
+fn solve2(rope_movements: &Vec<RopeMovement>) -> usize {
+    let mut visited_tail_positions: HashSet<Point> = HashSet::new();
+    let mut positions: Vec<Point> = vec![Point::new(0,0) ; 10];
+
+    for rope_movement in rope_movements {
+        for _step in 0..(rope_movement.amount) {
+            positions.get_mut(0).unwrap().move_step(&rope_movement.direction);
+            for i in 1..positions.len() {
+                propagate_move(&(positions[i - 1].clone()),
+                               positions.get_mut(i).unwrap());
+
+            }
+            visited_tail_positions.insert(positions.last().unwrap().clone());
+        }
+    }
+
+    visited_tail_positions.len()
+}
+
+fn propagate_move(position_head: &Point, position_tail: &mut Point) {
+
+    let distance_x = (position_head.x - position_tail.x).abs();
+
+    let distance_y = (position_head.y - position_tail.y).abs();
+
+    let directions_tail: Option<Vec<char>> =
+        // If the head is ever two steps directly up, down, left, or right from the tail,
+        // the tail must also move one step in that direction so it remains close enough:
+        if distance_x == 0 && distance_y == 2 {
+            if position_head.y >  position_tail.y {
+                Some(vec!('U'))
+            } else {
+                Some(vec!('D'))
+            }
+        }
+        else if distance_x == 2 && distance_y == 0 {
+            if position_head.x >  position_tail.x {
+                Some(vec!('R'))
+            } else {
+                Some(vec!('L'))
+            }
+        }
+        // Otherwise, if the head and tail aren't touching and aren't in the same row or column,
+        // the tail always moves one step diagonally to keep up:
+        else if (distance_x >= 1 && distance_y >= 1) && !(distance_x == 1 && distance_y == 1) {
+            let mut directions_tail: Vec<char> = Vec::new();
+            if position_head.x > position_tail.x {
+                directions_tail.push('R')
+            } else {
+                directions_tail.push('L')
+            }
+            if position_head.y > position_tail.y {
+                directions_tail.push('U')
+            } else {
+                directions_tail.push('D')
+            }
+            Some(directions_tail)
+        } else {
+            None
+        }
+    ;
+
+    if directions_tail.is_some() {
+        for direction in directions_tail.unwrap() {
+            position_tail.move_step(&direction)
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
