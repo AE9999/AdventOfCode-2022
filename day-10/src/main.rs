@@ -8,7 +8,9 @@ fn main() ->  io::Result<()> {
     let mut video_system =  read_input(&args[1])?;
 
     println!("{:?} is the sum of these six signal strengths.",
-             video_system.solve1());
+             video_system.clone().solve1());
+
+    video_system.solve2();
 
     Ok(())
 }
@@ -65,25 +67,7 @@ impl VideoSystem {
         let mut register_values: Vec<i64> = Vec::new();
 
         loop {
-
-            let current_instruction = self.instructions.get(self.pc).unwrap();
-            match current_instruction {
-                Noop { cycle_length} => {
-                    if self.current_instruction_start + cycle_length <= self.current_clock {
-                        self.pc = self.pc + 1;
-                        self.current_instruction_start = self.current_clock + 1;
-                    }
-                },
-                Addx { cycle_length, argument} => {
-                    if self.current_instruction_start + cycle_length <= self.current_clock {
-                        self.pc = self.pc + 1;
-                        self.current_instruction_start = self.current_clock + 1;
-                        self.register = self.register + argument;
-                    }
-                }
-            }
-
-            self.current_clock += 1;
+            self.step();
 
             if self.current_clock == 20
                || (self.current_clock >= 60
@@ -98,6 +82,50 @@ impl VideoSystem {
 
         register_values.iter()
                        .sum()
+    }
+
+    fn solve2(&mut self) {
+        for _ in 0..6 {
+            for i in 0..40 {
+                print!("{}", if ((self.register-1)..(self.register+2)).contains(&(i as i64)) {
+                    '#'
+                } else {
+                    '.'
+                });
+                self.step();
+
+            }
+            print!("\n")
+        }
+    }
+
+    fn next_instruction(&mut self) {
+        self.pc = self.pc + 1;
+        self.current_instruction_start = self.current_clock + 1;
+    }
+
+    fn instruction_done(&self, cycle_length: &u64) -> bool {
+        self.current_instruction_start + cycle_length <= self.current_clock
+    }
+
+    fn step(&mut self) {
+        let current_instruction = self.instructions.get(self.pc).unwrap();
+
+        match current_instruction {
+            Noop { cycle_length} => {
+                if self.instruction_done(cycle_length) {
+                    self.next_instruction();
+                }
+            },
+            Addx { cycle_length, argument} => {
+                if self.instruction_done(cycle_length) {
+                    self.register = self.register + argument;
+                    self.next_instruction();
+                }
+            }
+        }
+
+        self.current_clock += 1;
     }
 }
 
