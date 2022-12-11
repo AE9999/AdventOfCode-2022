@@ -6,60 +6,15 @@ use crate::Operand::Constant;
 
 fn main() ->  io::Result<()> {
     let args: Vec<String> = env::args().collect();
-    let monkeys = read_input(&args[1])?;
+    let mut problem = read_input(&args[1])?;
 
     println!("{:?} is the level of monkey business after 20 rounds of stuff-slinging simian shenanigans",
-             solve1(monkeys.clone()));
+             problem.solve());
 
     Ok(())
 }
 
-fn solve1(mut monkeys: Vec<Monkey>) -> usize {
-   for _ in 0..20 {
-
-       for i in 0..monkeys.len() {
-            let appensions = monkeys.get_mut(i).unwrap().do_round();
-            for x in appensions.iter() {
-                let mut items = (x.1).clone();
-                monkeys.get_mut(*(x.0)).unwrap().extend_items(&mut items);
-            }
-        }
-   }
-
-    let mut inspections =
-        monkeys.iter()
-               .map(|monkey|monkey.nr_of_inspections)
-               .collect::<Vec<usize>>();
-
-    inspections.sort();
-
-    inspections.iter().rev().take(2).fold(1, |prod, val| prod * val)
-
-}
-
-fn solve2(mut monkeys: Vec<Monkey>) -> usize {
-    for _ in 0..20 {
-
-        for i in 0..monkeys.len() {
-            let appensions = monkeys.get_mut(i).unwrap().do_round();
-            for x in appensions.iter() {
-                let mut items = (x.1).clone();
-                monkeys.get_mut(*(x.0)).unwrap().extend_items(&mut items);
-            }
-        }
-    }
-
-    let mut inspections =
-        monkeys.iter()
-            .map(|monkey|monkey.nr_of_inspections)
-            .collect::<Vec<usize>>();
-
-    inspections.sort();
-
-    inspections.iter().rev().take(2).fold(1, |prod, val| prod * val)
-}
-
-fn read_input(filename: &String) -> io::Result<Vec<Monkey>> {
+fn read_input(filename: &String) -> io::Result<Problem> {
     let file_in = File::open(filename)?;
 
 
@@ -70,7 +25,7 @@ fn read_input(filename: &String) -> io::Result<Vec<Monkey>> {
 
     let mut lines = raw_lines.iter();
 
-    let mut monkeys: Vec<Monkey> = Vec::new();
+    let mut problem = Problem::new();
 
     loop {
         let line = lines.next();
@@ -89,6 +44,12 @@ fn read_input(filename: &String) -> io::Result<Vec<Monkey>> {
                        .split(", ")
                        .map(|x| x.parse::<usize>().unwrap())
                        .collect::<Vec<usize>>();
+
+            let mut item_ids: Vec<usize> = Vec::new();
+            for starting_worry_value in items {
+                item_ids.push(problem.register_item(starting_worry_value))
+            }
+
 
             let operation_line =
                 lines.next()
@@ -137,7 +98,7 @@ fn read_input(filename: &String) -> io::Result<Vec<Monkey>> {
 
             let monkey =
                 Monkey {
-                items,
+                item_ids,
                 left,
                 right,
                 operator,
@@ -147,11 +108,11 @@ fn read_input(filename: &String) -> io::Result<Vec<Monkey>> {
                 nr_of_inspections: 0
             };
 
-            monkeys.push(monkey);
+            problem.register_monkey(monkey)
         }
     }
 
-    Ok(monkeys)
+    Ok(problem)
 }
 
 fn parse_operand(operand: &str) -> Operand {
@@ -164,7 +125,7 @@ fn parse_operand(operand: &str) -> Operand {
 
 #[derive(Debug, Clone)]
 struct Monkey {
-    items: Vec<usize>,
+    item_ids: Vec<usize>,
     left: Operand,
     right: Operand,
     operator: Operator,
@@ -175,35 +136,108 @@ struct Monkey {
 }
 
 impl Monkey {
-    fn do_round(&mut self) -> HashMap<usize, Vec<usize>> {
-        let mut rvalue: HashMap<usize, Vec<usize>> = HashMap::new();
-        rvalue.insert(self.test_true,Vec::new());
-        rvalue.insert(self.test_false,Vec::new());
 
-        for item in &self.items {
-            let new_worry_level = self.new_worry_level(*item);
-            rvalue.get_mut(&self.find_target(new_worry_level)).unwrap().push(new_worry_level);
-            self.nr_of_inspections += 1;
+    fn extend_items(&mut self, item_ids: &mut Vec<usize>) {
+        self.item_ids.append(item_ids);
+    }
+}
+
+struct Problem {
+    items: HashMap<usize, usize>,
+    remainder_for_monkey_for_item_id: HashMap<(usize, usize), usize>,
+    monkeys: Vec<Monkey>
+}
+
+impl Problem {
+
+    fn new() -> Self {
+        Problem {
+            items: HashMap::new(),
+            remainder_for_monkey_for_item_id: HashMap::new(),
+            monkeys: Vec::new(),
+        }
+    }
+
+    fn register_item(&mut self, starting_worry_value: usize) -> usize {
+        let id = self.items.len();
+        self.items.insert(id, starting_worry_value);
+
+
+        for monkey in &self.monkeys {
+            let key = (id, monkey.test);
+            let value = starting_worry_value % monkey.test;
+            self.remainder_for_monkey_for_item_id.insert(key, value);
         }
 
-        self.items = Vec::new();
+        return id
+    }
+
+    fn register_monkey(&mut self, monkey: Monkey) {
+        for item_id in 0..self.items.len() {
+            let key = (item_id, monkey.test);
+            let value = self.items.get(&item_id).unwrap() % monkey.test;
+            self.remainder_for_monkey_for_item_id.insert(key, value);
+        }
+
+        self.monkeys.push(monkey)
+    }
+
+    fn do_round(&mut self, i: usize) -> HashMap<usize, Vec<usize>> {
+        let mut monkey = self.monkeys.get_mut(i).unwrap();
+
+        let mut rvalue: HashMap<usize, Vec<usize>> = HashMap::new();
+
+        rvalue.insert(monkey.test_true,Vec::new());
+
+        rvalue.insert(monkey.test_false,Vec::new());
+
+        for item_id in &monkey.item_ids {
+            let key = (monkey.test, *item_id);
+
+            let worry_level_remainder = self.remainder_for_monkey_for_item_id.get(&key).unwrap();
+
+            // TODO(Recalculate this for all buckets)
+            let new_worry_level_remainder = 0 as usize;
+            self.remainder_for_monkey_for_item_id.insert(key, new_worry_level_remainder);
+
+            if new_worry_level_remainder == 0 {
+
+            } else {
+
+            }
+            // rvalue.get_mut(&self.find_target(new_worry_level)).unwrap().push(new_worry_level);
+
+            monkey.nr_of_inspections += 1;
+        }
+
+        monkey.item_ids = Vec::new();
         rvalue
     }
 
-    fn new_worry_level(&self, current_worry_level: usize) -> usize {
-        self.operator.evaluate(&self.left, &self.right,current_worry_level )
-    }
+    fn solve(&mut self) -> usize {
+        for _ in 0..10000 {
 
-    fn find_target(&self, new_worry_level: usize) -> usize {
-        if new_worry_level % self.test == 0 {
-            self.test_true
-        } else {
-            self.test_false
+            for i in 0..self.monkeys.len() {
+
+                let appensions = self.do_round(i);
+
+
+                for x in appensions.iter() {
+                    let mut items = (x.1).clone();
+                    self.monkeys.get_mut(*(x.0)).unwrap().extend_items(&mut items);
+                }
+            }
         }
-    }
 
-    fn extend_items(&mut self, items: &mut Vec<usize>) {
-        self.items.append(items);
+        let mut inspections =
+            self.monkeys.iter()
+                .map(|monkey|monkey.nr_of_inspections)
+                .collect::<Vec<usize>>();
+
+        inspections.sort();
+
+        inspections.iter().rev().take(2).fold(1, |prod, val| prod * val)
+
     }
 }
 
