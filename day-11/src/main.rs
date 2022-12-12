@@ -9,12 +9,12 @@ fn main() ->  io::Result<()> {
     let monkeys = read_input(&args[1])?;
 
     println!("{:?} is the level of monkey business after 20 rounds of stuff-slinging simian shenanigans",
-             solve1(monkeys.clone()));
+             solve(monkeys.clone()));
 
     Ok(())
 }
 
-fn solve1(mut monkeys: Vec<Monkey>) -> usize {
+fn solve(mut monkeys: Vec<Monkey>) -> usize {
    for _ in 0..20 {
 
        for i in 0..monkeys.len() {
@@ -35,28 +35,6 @@ fn solve1(mut monkeys: Vec<Monkey>) -> usize {
 
     inspections.iter().rev().take(2).fold(1, |prod, val| prod * val)
 
-}
-
-fn solve2(mut monkeys: Vec<Monkey>) -> usize {
-    for _ in 0..20 {
-
-        for i in 0..monkeys.len() {
-            let appensions = monkeys.get_mut(i).unwrap().do_round();
-            for x in appensions.iter() {
-                let mut items = (x.1).clone();
-                monkeys.get_mut(*(x.0)).unwrap().extend_items(&mut items);
-            }
-        }
-    }
-
-    let mut inspections =
-        monkeys.iter()
-            .map(|monkey|monkey.nr_of_inspections)
-            .collect::<Vec<usize>>();
-
-    inspections.sort();
-
-    inspections.iter().rev().take(2).fold(1, |prod, val| prod * val)
 }
 
 fn read_input(filename: &String) -> io::Result<Vec<Monkey>> {

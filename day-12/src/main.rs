@@ -20,32 +20,36 @@ fn main() ->  io::Result<()> {
     let problem = read_input(&args[1])?;
 
     println!("{:?} is the fewest steps required to move from your current position to the location that should get the best signal",
-             solve1(problem.clone()));
+             find_path_lenght(&problem, &problem.initial_start_point));
+
+    //
+    // Yes the optimal solution would be to do some reverse stuff, going back for 'E' to see if we can reach a and than find the minimal one.
+    // However I am very lazy and rust is very fast so this still runs in reasonable time :-)
+    //
+    println!("{:?} is the fewest steps required to move starting from any square with elevation a to the location that should get the best signal",
+             problem.possible_starting_points
+                 .iter()
+                 .enumerate()
+                 .map(|point| {
+                     println!("Solving {:?} / {:?} ..", point.0, problem.possible_starting_points.len());
+                     find_path_lenght(&problem, point.1)
+                 })
+                 .min()
+                 .unwrap()
+    );
 
     Ok(())
 }
 
-fn solve1(problem: Problem) -> usize {
+fn find_path_lenght(problem: &Problem, starting_point: &Point) -> usize {
+
+    println!("Testing {:?}", starting_point);
+
     let mut points_2_weight: HashMap<Point, usize> = HashMap::new();
     let mut stack: Vec<Point> = Vec::new();
-    let mut endpoint: Option<Point> = None;
 
-    for y in 0..problem.height() {
-        for x in 0..problem.width() {
-            let point = Point::new(x,y);
-
-            if problem.char_at(&point) == 'S' {
-                stack.push(point.clone());
-                points_2_weight.insert(point.clone(), 0);
-            }
-
-            if problem.char_at(&point) == 'E' {
-                endpoint = Some(point);
-            }
-        }
-    }
-
-    assert!(endpoint.is_some());
+    points_2_weight.insert(starting_point.clone(), 0);
+    stack.push(starting_point.clone());
 
     loop {
 
@@ -72,7 +76,7 @@ fn solve1(problem: Problem) -> usize {
 
     }
 
-    *points_2_weight.get(&endpoint.unwrap()).unwrap()
+    *points_2_weight.get(&problem.end_point).unwrap_or(& usize::MAX) // not guaranteed to there be a path
 }
 
 fn read_input(filename: &String) -> io::Result<Problem> {
@@ -89,7 +93,10 @@ fn read_input(filename: &String) -> io::Result<Problem> {
 
 #[derive(Debug, Clone)]
 struct Problem {
-    squares: Vec<Vec<char>>
+    squares: Vec<Vec<char>>,
+    initial_start_point: Point,
+    possible_starting_points: Vec<Point>,
+    end_point: Point,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -107,8 +114,32 @@ impl Point {
 }
 
 impl Problem {
-    fn new(squares: Vec<Vec<char>>) -> Self {
+    fn new(mut squares: Vec<Vec<char>>) -> Self {
+
+        let mut end_point :Option<Point> = None;
+        let mut initial_start_point   :Option<Point> = None;
+        let mut possible_starting_points: Vec<Point> = Vec::new();
+
+        for y in 0..squares.len() {
+            for x in 0..squares[y].len() {
+                if squares[y][x] == 'S' {
+                    squares[y][x] = 'a';
+                    initial_start_point = Some(Point::new(x,y));
+                } else if squares[y][x] == 'E' {
+                    end_point = Some(Point::new(x,y));
+                } else if squares[y][x] == 'a' {
+                    possible_starting_points.push(Point::new(x,y))
+                }
+            }
+        }
+
+        assert!(end_point.is_some());
+        assert!(initial_start_point.is_some());
+
         Problem {
+            initial_start_point: initial_start_point.unwrap(),
+            end_point: end_point.unwrap(),
+            possible_starting_points,
             squares
         }
     }
@@ -150,7 +181,6 @@ impl Problem {
 
         if char_at_from == 'E' { return false } // We can never move from e
 
-
         let char_at_to = self.char_at(to);
 
         if char_at_to == 'S' { return false } // We can never go back to s
@@ -162,8 +192,6 @@ impl Problem {
         } else {
             *CHAR_VALUE_HASHMAP.get(&char_at_to).unwrap()
         };
-
-        //println!("\t\t{:?} ({:?}) vs {:?}  ({:?}), {:?} ..", char_at_from, from_value, char_at_to, to_value, to_value - 1 <= from_value);
 
         return to_value - 1 <= from_value
     }
