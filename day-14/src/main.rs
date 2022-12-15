@@ -128,11 +128,9 @@ impl Cave {
         loop {
             let mut current_point = Point { x: 500, y: 0 };
             loop {
-
                 if current_point.y == end_y {
                     return occupied_squares.len() - original_size;
                 }
-
                 if !occupied_squares.contains(&current_point.down()) {
                     current_point = current_point.down();
                 } else if !occupied_squares.contains(&current_point.down_and_left()) {
