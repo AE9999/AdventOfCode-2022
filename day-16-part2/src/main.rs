@@ -58,47 +58,93 @@ impl Problem {
                 return valve.flow_rate * search_state.valve_open[i]
             }).fold(0, |sum, val| sum + val);
 
-        let possible_value = (0..search_state.valve_open.len()).into_iter()
+        let possible_value_me = (0..search_state.valve_open.len()).into_iter()
             .filter(|&i|{
                 search_state.valve_open[i] == 0
             })
             .map(|i|{
                 let valve = self.valves.get(i).unwrap();
-                let key = (search_state.current_position.clone(), valve.name.clone());
+                let key = (search_state.current_position_me.clone(), valve.name.clone());
                 let time_needed = *(self.distance_between_valves.get(&key).unwrap()) + 1;
-                return if  search_state.time_left >= time_needed   {
-                    valve.flow_rate * (search_state.time_left - time_needed)
+                return if  search_state.time_left_me >= time_needed   {
+                    valve.flow_rate * (search_state.time_left_me - time_needed)
                 } else {
                     0
                 }
             }).fold(0, |sum, val| sum + val);
 
-        if current_value + possible_value <= self.current_lower_bound {
+        let possible_value_elephant = (0..search_state.valve_open.len()).into_iter()
+            .filter(|&i|{
+                search_state.valve_open[i] == 0
+            })
+            .map(|i|{
+                let valve = self.valves.get(i).unwrap();
+                let key = (search_state.current_position_elephant.clone(), valve.name.clone());
+                let time_needed = *(self.distance_between_valves.get(&key).unwrap()) + 1;
+                return if  search_state.time_left_elephant >= time_needed   {
+                    valve.flow_rate * (search_state.time_left_elephant - time_needed)
+                } else {
+                    0
+                }
+            }).fold(0, |sum, val| sum + val);
+
+        if current_value + possible_value_me + possible_value_elephant <= self.current_lower_bound {
             return self.current_lower_bound;
         }
 
-
         let mut results: Vec<i32> = Vec::new();
         for i in 0..search_state.valve_open.len() {
-            let valve = self.valves.get(i).unwrap();
-
-            let key = (search_state.current_position.clone(), valve.name.clone());
-
-            let time_needed = *(self.distance_between_valves.get(&key).unwrap()) + 1;
+            let valve = self.valves.get(i).unwrap().clone();
 
             if (search_state.valve_open[i] == 0)
-                && valve.flow_rate > 0 // Yeah it really is that simple
-                && search_state.time_left - time_needed > 0 {
-                let mut next_search_state = search_state.clone();
-                next_search_state.current_position = valve.name.clone();
-                next_search_state.time_left = search_state.time_left - time_needed;
-                next_search_state.valve_open[i] = search_state.time_left - time_needed;
+                && valve.flow_rate > 0 { // Yeah it really is that simple {
 
-                let result = self.do_solve(next_search_state);
+                // I go
+                let key = (search_state.current_position_me.clone(), valve.name.clone());
+                let time_needed = *(self.distance_between_valves.get(&key).unwrap()) + 1;
+                let result_me =
+                    if search_state.time_left_me - time_needed > 0 {
+                        let mut next_search_state = search_state.clone();
+                        next_search_state.current_position_me = valve.name.clone();
+                        next_search_state.time_left_me = search_state.time_left_me - time_needed;
+                        next_search_state.valve_open[i] = search_state.time_left_me - time_needed;
+                        Some(self.do_solve(next_search_state))
+                    } else {
+                        None
+                    }
+                ;
 
-                self.current_lower_bound = max(self.current_lower_bound, result);
-                results.push(result);
+                // The elephant goes
+                let key = (search_state.current_position_elephant.clone(), valve.name.clone());
+                let time_needed = *(self.distance_between_valves.get(&key).unwrap()) + 1;
+                let result_elephant =
+                    if search_state.time_left_elephant - time_needed > 0 {
+                        let mut next_search_state = search_state.clone();
+                        next_search_state.current_position_elephant = valve.name.clone();
+                        next_search_state.time_left_elephant = search_state.time_left_elephant - time_needed;
+                        next_search_state.valve_open[i] = search_state.time_left_elephant - time_needed;
+                        Some(self.do_solve(next_search_state))
+                    } else {
+                        None
+                    }
+                ;
 
+                if result_me.is_none() && result_elephant.is_none() {
+                    continue; // do nothing
+                } else if result_me.is_some() && result_elephant.is_none() {
+                    let result = result_me.unwrap();
+                    self.current_lower_bound = max(self.current_lower_bound, result);
+                    results.push(result);
+                } else if result_me.is_none() && result_elephant.is_some() {
+                    let result = result_elephant.unwrap();
+                    self.current_lower_bound = max(self.current_lower_bound, result);
+                    results.push(result);
+                } else {
+                    assert!(result_me.is_some() && result_elephant.is_some());
+                    let result = max(result_me.unwrap(), result_elephant.unwrap());
+                    self.current_lower_bound = max(self.current_lower_bound, result);
+                    results.push(result);
+                }
             }
         }
 
@@ -118,14 +164,14 @@ impl Problem {
 
     fn solve(&mut self) -> i32 {
         let search_state = SearchState {
-            current_position: self.starting_position.clone(),
+            current_position_me: self.starting_position.clone(),
+            time_left_me: self.starting_time_left,
+            current_position_elephant: self.starting_position.clone(),
+            time_left_elephant: self.starting_time_left,
             valve_open: vec![0 ; self.valves.len()],
-            time_left: self.starting_time_left
         };
         self.do_solve(search_state)
     }
-
-
 }
 
 fn find_shortest_paths_for_valve_to_other_valves(valves: &Vec<Valve>,
@@ -176,16 +222,18 @@ impl Problem {
             current_lower_bound: 0,
             valves,
             starting_position: String::from("AA"),
-            starting_time_left: 30,
+            starting_time_left: 26,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct SearchState {
-    current_position: String,
+    current_position_me: String,
+    time_left_me: i32,
+    current_position_elephant: String,
+    time_left_elephant: i32,
     valve_open: Vec<i32>,
-    time_left: i32
 }
 
 
