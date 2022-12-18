@@ -44,7 +44,6 @@ fn valve_index_by_name(valves: &Vec<Valve>, name: &str) -> usize {
 #[derive(Debug, Clone)]
 struct Problem {
     distance_between_valves: HashMap<(String, String), i32>,
-    solved_search_states: HashMap<SearchState, i32>,
     current_lower_bound: i32,
     valves: Vec<Valve>,
     starting_position: String,
@@ -55,36 +54,31 @@ impl Problem {
 
     fn do_solve1(&mut self, search_state: SearchState) -> i32 {
 
-        if self.solved_search_states.get(&search_state).is_some() {
-            return *(self.solved_search_states.get(&search_state).unwrap());
+        let current_value = (0..search_state.valve_open.len()).into_iter()
+            .map(|i|{
+                let valve = self.valves.get(i).unwrap();
+                return valve.flow_rate * search_state.valve_open[i]
+            }).fold(0, |sum, val| sum + val);
+
+        let possible_value = (0..search_state.valve_open.len()).into_iter()
+            .filter(|&i|{
+                search_state.valve_open[i] == 0
+            })
+            .map(|i|{
+                let valve = self.valves.get(i).unwrap();
+                let key = (search_state.current_position.clone(), valve.name.clone());
+                let time_needed = *(self.distance_between_valves.get(&key).unwrap()) + 1;
+                return if  search_state.time_left >= time_needed   {
+                    valve.flow_rate * (search_state.time_left - time_needed)
+                } else {
+                    0
+                }
+            }).fold(0, |sum, val| sum + val);
+
+        if current_value + possible_value <= self.current_lower_bound {
+            return self.current_lower_bound;
         }
 
-        // let current_value = (0..search_state.valve_open.len()).into_iter()
-        //     .map(|i|{
-        //         let valve = self.valves.get(i).unwrap();
-        //         return valve.flow_rate * search_state.valve_open[i]
-        //     }).fold(0, |sum, val| sum + val);
-        //
-        // let possible_value = (0..search_state.valve_open.len()).into_iter()
-        //     .filter(|&i|{
-        //         search_state.valve_open[i] == 0
-        //     })
-        //     .map(|i|{
-        //         let valve = self.valves.get(i).unwrap();
-        //         let key = (search_state.current_position.clone(), valve.name.clone());
-        //         let time_needed = *(self.distance_between_valves.get(&key).unwrap()) + 1;
-        //         return if  search_state.time_left >= time_needed   {
-        //             valve.flow_rate * search_state.valve_open[i]
-        //         } else {
-        //             0
-        //         }
-        //     }).fold(0, |sum, val| sum + val);
-        //
-        // if current_value + possible_value < self.current_lower_bound {
-        //     return self.current_lower_bound;
-        // }
-
-        // deal with bound
 
         let mut results: Vec<i32> = Vec::new();
         for i in 0..search_state.valve_open.len() {
@@ -101,7 +95,10 @@ impl Problem {
                 next_search_state.time_left = search_state.time_left - time_needed;
                 next_search_state.valve_open[i] = search_state.time_left - time_needed;
 
-                results.push(self.do_solve1(next_search_state));
+                let result = self.do_solve1(next_search_state);
+
+                self.current_lower_bound = max(self.current_lower_bound, result);
+                results.push(result);
 
             }
         }
@@ -109,17 +106,14 @@ impl Problem {
         let result = if !results.is_empty() {
             *(results.iter().max().unwrap())
         } else {
-            let r =
-                (0..search_state.valve_open.len()).into_iter()
-                                              .map(|i|{
-                                                  let valve = self.valves.get(i).unwrap();
-                                                  return valve.flow_rate * search_state.valve_open[i]
-                                              }).fold(0, |sum, val| sum + val);
-            self.current_lower_bound = max(self.current_lower_bound, r);
-            r
-        };
+            (0..search_state.valve_open.len()).into_iter()
+                                          .map(|i|{
+                                              let valve = self.valves.get(i).unwrap();
+                                              return valve.flow_rate * search_state.valve_open[i]
+                                          }).fold(0, |sum, val| sum + val)
+        };next_search_state_to_store
+        self.current_lower_bound = max(self.current_lower_bound, result);
 
-        self.solved_search_states.insert(search_state.clone(), result);
         result
     }
 
@@ -180,7 +174,6 @@ impl Problem {
 
         Problem {
             distance_between_valves,
-            solved_search_states: HashMap::new(),
             current_lower_bound: 0,
             valves,
             starting_position: String::from("AA"),
