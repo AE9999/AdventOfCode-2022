@@ -1,0 +1,186 @@
+let sq_size = tiles.len() / 4;
+
+        let lls: Vec<Point> =
+         vec!(
+             // 1
+            Point {
+                x: 0,
+                y: (tiles.len() -1) as i32,
+            },
+             // 2
+            Point {
+                x: 0,
+                y: (tiles.len() -1 - sq_size) as i32,
+            },
+             // 3
+            Point {
+                x: sq_size as i32,
+                y: (tiles.len() -1 - sq_size) as i32,
+            },
+             // 4
+            Point {
+                x: sq_size as i32,
+                y: (tiles.len() -1 - (2* sq_size)) as i32,
+            },
+             // 5
+             Point {
+                 x: sq_size as i32,
+                 y: (tiles.len() -1 - (1* sq_size)) as i32,
+             },
+             // 6
+             Point {
+                 x: (2 * sq_size) as i32,
+                 y: (tiles.len() -1 - (1* sq_size)) as i32,
+             },
+         );
+
+        let squares: Vec<Square> =
+            lls.iter().map(|ll| Square {
+                ll: ll.clone(),
+                size: sq_size as i32,
+            }).collect::<Vec<Square>>();
+
+        let mut jump_map: HashMap<(Point, Direction), (Point, Direction)> = HashMap::new();
+
+        // 1 -> 3
+        Problem::populate_jump_map(
+            squares[0].get_edge(Edge::Right),
+            Direction::Right,
+            squares[2].get_edge(Edge::Down),
+            Direction::Up,
+            false,
+            &mut jump_map);
+
+        // 3 -> 1
+        Problem::populate_jump_map(
+            squares[2].get_edge(Edge::Down),
+            Direction::Down,
+            squares[0].get_edge(Edge::Right),
+            Direction::Left,
+            true,
+            &mut jump_map);
+
+        Problem::validate_jump_map(&jump_map);
+
+        // 1 -> 6
+        Problem::populate_jump_map(
+            squares[0].get_edge(Edge::Down),
+            Direction::Down,
+            squares[5].get_edge(Edge::Up),
+            Direction::Down,
+            false,
+            &mut jump_map);
+
+        // 6 -> 1
+        Problem::populate_jump_map(
+            squares[5].get_edge(Edge::Up),
+            Direction::Up,
+            squares[0].get_edge(Edge::Down),
+            Direction::Up,
+            false,
+            &mut jump_map);
+
+        Problem::validate_jump_map(&jump_map);
+
+        // 2 -> 4
+        Problem::populate_jump_map(
+            squares[1].get_edge(Edge::Up),
+            Direction::Up,
+            squares[3].get_edge(Edge::Left),
+            Direction::Right,
+            true,
+            &mut jump_map);
+
+
+        // 4 -> 2
+        Problem::populate_jump_map(
+            squares[3].get_edge(Edge::Left),
+            Direction::Left,
+            squares[1].get_edge(Edge::Up),
+            Direction::Down,
+            true,
+            &mut jump_map);
+
+        Problem::validate_jump_map(&jump_map);
+
+        // 2 -> 5
+        Problem::populate_jump_map(
+            squares[1].get_edge(Edge::Left),
+            Direction::Left,
+            squares[4].get_edge(Edge::Left),
+            Direction::Right,
+            true,
+            &mut jump_map);
+
+
+        // 5 -> 2
+        Problem::populate_jump_map(
+            squares[4].get_edge(Edge::Left),
+            Direction::Left,
+            squares[1].get_edge(Edge::Left),
+            Direction::Right,
+            true,
+            &mut jump_map);
+
+        Problem::validate_jump_map(&jump_map);
+
+        // 3 -> 6
+        Problem::populate_jump_map(
+            squares[2].get_edge(Edge::Right),
+            Direction::Right,
+            squares[5].get_edge(Edge::Right),
+            Direction::Left,
+            true,
+            &mut jump_map);
+
+
+        // 6 -> 3
+        Problem::populate_jump_map(
+            squares[5].get_edge(Edge::Right),
+            Direction::Right,
+            squares[2].get_edge(Edge::Right),
+            Direction::Left,
+            true,
+            &mut jump_map);
+
+        Problem::validate_jump_map(&jump_map);
+
+        // 4 -> 6
+        Problem::populate_jump_map(
+            squares[3].get_edge(Edge::Right),
+            Direction::Right,
+            squares[5].get_edge(Edge::Down),
+            Direction::Up,
+            true,
+            &mut jump_map);
+
+        // 6 -> 4
+        Problem::populate_jump_map(
+            squares[5].get_edge(Edge::Down),
+            Direction::Down,
+            squares[3].get_edge(Edge::Right),
+            Direction::Left,
+            true,
+            &mut jump_map);
+
+        Problem::validate_jump_map(&jump_map);
+
+        // 1 -> 5
+        Problem::populate_jump_map(
+            squares[0].get_edge(Edge::Left),
+            Direction::Left,
+            squares[4].get_edge(Edge::Up),
+            Direction::Down,
+            true,
+            &mut jump_map);
+
+        // 5 -> 1
+        Problem::populate_jump_map(
+            squares[4].get_edge(Edge::Up),
+            Direction::Up,
+            squares[0].get_edge(Edge::Left),
+            Direction::Right,
+            true,
+            &mut jump_map);
+
+        Problem::validate_jump_map(&jump_map);

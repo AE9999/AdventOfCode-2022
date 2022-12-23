@@ -8,16 +8,15 @@ use std::env;
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let problem  = read_input(&args[1])?;
-    println!("{:?} is the final password", solve1(problem.clone()));
+    println!("{:?} is the final password", solve2(problem.clone()));
 
     Ok(())
 }
 
-fn solve1(mut problem: Problem) -> i32 {
-    println!("Standing at {:?} ", &(problem.position));
+fn solve2(mut problem: Problem) -> i32 {
+
     loop {
         problem.step();
-        println!("Moved to {:?} ", &(problem.position));
         if problem.done() {
             return problem.password()
         }
@@ -56,10 +55,30 @@ struct Problem {
     position: Point,
     direction: Direction,
     instruction_index: usize,
-    mapped_endpoints: HashMap<(Point, Direction), (Point, Direction)>,
+    jump_map: HashMap<(Point, Direction), (Point, Direction)>,
 }
 
 impl Problem {
+
+    fn populate_jump_map(left_edge: Vec<Point>,
+                         incoming_direction: Direction,
+                         right_edge:Vec<Point>,
+                         outgoing_direction: Direction,
+                         reverse: bool,
+                         jump_map: &mut HashMap<(Point, Direction), (Point, Direction)>) {
+        for i in 0..left_edge.len() {
+            let left = left_edge[i].clone();
+            let right =
+                if reverse {
+                    right_edge[right_edge.len() -1 - i].clone()
+                } else {
+                    right_edge[i].clone()
+                };
+            jump_map.insert((left, incoming_direction.clone()),
+                             (right, outgoing_direction.clone()));
+        }
+    }
+
     fn new(tiles: Vec<Vec<char>>, input: Vec<char>) -> Self {
         let y: i32  = 0;
         let x =
@@ -71,189 +90,173 @@ impl Problem {
                        .next()
                        .unwrap();
 
+        // Unique for my input I guess
 
-        assert_eq!((tiles.iter().map(|tile| tile.len()).max().unwrap() / 4) as i32, (tiles.len() / 4) as i32);
-        let square_size = (tiles.len() / 4) as i32;
+        let sq_size = (tiles.len() / 4) as i32;
 
-        //
-        // 1,(Point { x: 0, y: 4 * h_unit}, Point { x: 1 * w_unit, y: 3 * h_unit}
-        // 2 Point { x: 0, y: 3 * h_unit}, Point { x: w_unit, y: 2 * h_unit})
-        // 3,(Point { x: w_unit, y: 3 * h_unit}, Point { x: 2 * w_unit, y: 2 * h_unit})
-        // 4,(Point { x: w_unit, y: 2 * h_unit}, Point { x: 2 * w_unit, y: 1 * h_unit}) );
-        // 5,(Point { x: w_unit, y: 1 * h_unit}, Point { x: 2 * w_unit, y: 0 }) );
-        // 6,(Point { x: 2 * w_unit, y: 1 * h_unit}, Point { x: 3 * w_unit, y: 0 }) );
+        let base_ll =
+            Point {
+                x: 0,
+                y: (tiles.len() -1) as i32,
+            };
 
-        let mut  mapped_endpoints: HashMap<(Point, Direction), (Point, Direction)> = HashMap::new();
+        let lls: Vec<Point> =
+         vec!(
+             // 1
+            base_ll.dxdy(0, 0),
 
-        let mut direction: Direction = Direction::Left;
-        let mut outgoing_direction =  Direction::Right;
+             // 2
+            base_ll.dxdy(0, -sq_size),
+
+             // 3
+             base_ll.dxdy(sq_size, -sq_size),
+
+             // 4
+            base_ll.dxdy(sq_size, -2 * sq_size),
+
+             // 5
+             base_ll.dxdy(sq_size, -3 * sq_size),
+
+             // 6
+             base_ll.dxdy(2 * sq_size, -3 * sq_size),
+         );
+
+        let squares: Vec<Square> =
+            lls.iter().map(|ll| Square {
+                ll: ll.clone(),
+                size: sq_size as i32,
+            }).collect::<Vec<Square>>();
+
+        let mut jump_map: HashMap<(Point, Direction), (Point, Direction)> = HashMap::new();
 
         // 1 -> 3
-        direction = Direction::Right;
-        outgoing_direction = Direction::Up;
-        for i in 0..square_size {
-            let origin = Point {
-                x: square_size - 1,
-                y: (3 * square_size) + i
-            };
-            let destination = Point {
-                x: square_size + i,
-                y: (3 * square_size)
-            };
-            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
-        }
-
-        // 1 -> 5
-        direction = Direction::Left;
-        outgoing_direction = Direction::Down;
-        for i in 0..square_size {
-            let origin = Point {
-                x: 0,
-                y: (3 * square_size) + i
-            };
-            let destination = Point {
-                x: (square_size * 2) + i,
-                y: (3 * square_size)
-            };
-            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
-        }
-
-        // 1 -> 6
-        direction = Direction::Down;
-        outgoing_direction = Direction::Down;
-        for i in 0..square_size {
-            let origin = Point {
-                x: i,
-                y: (4 * square_size)
-            };
-            let destination = Point {
-                x: (square_size * 3) - 1 - i,
-                y: 0
-            };
-            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
-        }
-
-
-        // 2 -> 5
-        direction = Direction::Left;
-        outgoing_direction = Direction::Right;
-        for i in 0..square_size {
-            let origin = Point {
-                x: 0,
-                y: 2 * square_size + i
-            };
-            let destination = Point {
-                x: square_size,
-                y: square_size - i,
-            };
-            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
-        }
-
-        let TODO_DIRECTION = Direction::Right;
-        let TODO_POINT = Point { x:-1, y:-1};
-
-        // 2 -> 4
-        direction = Direction::Up;
-        outgoing_direction = Direction::Right;
-        for i in 0..square_size {
-            let origin = Point {
-                x: i,
-                y: 2 * square_size
-            };
-            let destination = Point {
-                x: square_size,
-                y:( square_size * 2) - i,
-            };
-            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
-        }
+        Problem::populate_jump_map(
+            squares[0].get_edge(Edge::Right),
+            Direction::Right,
+            squares[2].get_edge(Edge::Down),
+            Direction::Up,
+            true,
+            &mut jump_map);
 
         // 3 -> 1
-        direction = Direction::Down;
-        outgoing_direction = Direction::Left;
-        for i in 0..square_size {
-            let origin = Point {
-                x: square_size+ i,
-                y: 3 * square_size
-            };
-            let destination = Point {
-                x: square_size,
-                y:( square_size * 3) + i,
-            };
-            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
-        }
+        Problem::populate_jump_map(
+            squares[2].get_edge(Edge::Down),
+            Direction::Down,
+            squares[0].get_edge(Edge::Right),
+            Direction::Left,
+            true,
+            &mut jump_map);
+
+        // 1 -> 6
+        Problem::populate_jump_map(
+            squares[0].get_edge(Edge::Down),
+            Direction::Down,
+            squares[5].get_edge(Edge::Up),
+            Direction::Down,
+            false,
+            &mut jump_map);
+
+        // 6 -> 1
+        Problem::populate_jump_map(
+            squares[5].get_edge(Edge::Up),
+            Direction::Up,
+            squares[0].get_edge(Edge::Down),
+            Direction::Up,
+            false,
+            &mut jump_map);
+
+        // 2 -> 4
+        Problem::populate_jump_map(
+            squares[1].get_edge(Edge::Up),
+            Direction::Up,
+            squares[3].get_edge(Edge::Left),
+            Direction::Right,
+            true,
+            &mut jump_map);
+
+
+        // 4 -> 2
+        Problem::populate_jump_map(
+            squares[3].get_edge(Edge::Left),
+            Direction::Left,
+            squares[1].get_edge(Edge::Up),
+            Direction::Down,
+            true,
+            &mut jump_map);
+
+        // 2 -> 5
+        Problem::populate_jump_map(
+            squares[1].get_edge(Edge::Left),
+            Direction::Left,
+            squares[4].get_edge(Edge::Left),
+            Direction::Right,
+            true,
+            &mut jump_map);
+
+
+        // 5 -> 2
+        Problem::populate_jump_map(
+            squares[4].get_edge(Edge::Left),
+            Direction::Left,
+            squares[1].get_edge(Edge::Left),
+            Direction::Right,
+            true,
+            &mut jump_map);
 
         // 3 -> 6
-        direction = Direction::Right;
-        outgoing_direction =  Direction::Left;
-        for i in 0..square_size {
-            let origin = TODO_POINT.clone();
-            let destination = TODO_POINT.clone();
-            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
-        }
+        Problem::populate_jump_map(
+        squares[2].get_edge(Edge::Right),
+        Direction::Right,
+        squares[5].get_edge(Edge::Right),
+        Direction::Left,
+        true,
+        &mut jump_map);
 
-        // 4 -> ?
-        direction = Direction::Left;
-        outgoing_direction = TODO_DIRECTION.clone();
-        for i in 0..square_size {
-            let origin = TODO_POINT.clone();
-            let destination = TODO_POINT.clone();
-            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
-        }
 
-        // 4 -> ?
-        direction = Direction::Right;
-        outgoing_direction = TODO_DIRECTION.clone();
-        for i in 0..square_size {
-            let origin = TODO_POINT.clone();
-            let destination = TODO_POINT.clone();
-            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
-        }
+        // 6 -> 3
+        Problem::populate_jump_map(
+        squares[5].get_edge(Edge::Right),
+        Direction::Right,
+        squares[2].get_edge(Edge::Right),
+        Direction::Left,
+        true,
+        &mut jump_map);
 
-        // 5 -> ?
-        direction = Direction::Left;
-        outgoing_direction = TODO_DIRECTION.clone();
-        for i in 0..square_size {
-            let origin = TODO_POINT.clone();
-            let destination = TODO_POINT.clone();
-            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
-        }
+        // 4 -> 6
+        Problem::populate_jump_map(
+        squares[3].get_edge(Edge::Right),
+        Direction::Right,
+        squares[5].get_edge(Edge::Down),
+        Direction::Up,
+        true,
+        &mut jump_map);
 
-        // 5 -> ?
-        direction = Direction::Up;
-        outgoing_direction = TODO_DIRECTION.clone();
-        for i in 0..square_size {
-            let origin = TODO_POINT.clone();
-            let destination = TODO_POINT.clone();
-            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
-        }
+        // 6 -> 4
+        Problem::populate_jump_map(
+        squares[5].get_edge(Edge::Down),
+        Direction::Down,
+        squares[3].get_edge(Edge::Right),
+        Direction::Left,
+        true,
+        &mut jump_map);
 
-        // 6 -> ?
-        direction = Direction::Up;
-        outgoing_direction = TODO_DIRECTION.clone();
-        for i in 0..square_size {
-            let origin = TODO_POINT.clone();
-            let destination = TODO_POINT.clone();
-            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
-        }
+        // 1 -> 5
+        Problem::populate_jump_map(
+        squares[0].get_edge(Edge::Left),
+        Direction::Left,
+        squares[4].get_edge(Edge::Up),
+        Direction::Down,
+        true,
+        &mut jump_map);
 
-        // 6 -> ?
-        direction = Direction::Right;
-        outgoing_direction = TODO_DIRECTION.clone();
-        for i in 0..square_size {
-            let origin = TODO_POINT.clone();
-            let destination = TODO_POINT.clone();
-            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
-        }
-
-        // 6 -> ?
-        direction = Direction::Down;
-        outgoing_direction = TODO_DIRECTION.clone();
-        for i in 0..square_size {
-            let origin = TODO_POINT.clone();
-            let destination = TODO_POINT.clone();
-            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
-        }
-
+        // 5 -> 1
+        Problem::populate_jump_map(
+        squares[4].get_edge(Edge::Up),
+        Direction::Up,
+        squares[0].get_edge(Edge::Left),
+        Direction::Right,
+        true,
+        &mut jump_map);
 
         Problem {
             tiles,
@@ -261,7 +264,7 @@ impl Problem {
             position: Point { x, y },
             direction: Direction::Right,
             instruction_index: 0,
-            mapped_endpoints,
+            jump_map,
         }
     }
 
@@ -282,26 +285,16 @@ impl Problem {
             }
 
             let movement = instruction_buffer.parse::<usize>().unwrap();
-            // println!("Moving {:?} positions ..", movement);
             for _ in 0..movement {
                 let point = self.position.next(&self.direction);
                 let off_map = self.is_off_map(&point);
 
                 let (point, direction) =
                     if off_map {
-                        self.calculate_arrival_point(&self.position, &self.direction)
+                        self.calculate_arrival_point_and_direction(&self.position, &self.direction)
                     } else {
                         (point, self.direction.clone())
                     };
-
-                if off_map {
-                    println!("Trying to see if we reverse we would be back ..");
-                    let step_back =
-                        self.calculate_arrival_point(&point, &direction.inverse());
-                    assert_eq!(step_back.0,
-                               self.position,
-                              "Reverse does not equal starting position. please debug ..Calculated Point");
-                }
 
                 assert!(self.is_wall(&point) ^ self.is_empty(&point));
 
@@ -370,46 +363,68 @@ impl Problem {
         char.is_none() || char.unwrap() == ' '
     }
 
-    fn calculate_face_of_cube(&self, point: &Point) -> u32 {
-        assert!(!self.is_off_map(point));
-        let l_unit = (self.len() / 4) as i32;
-        let h_unit = (self.height() / 3) as i32;
-        //assert_eq!( (self.len() / 4), (self.height() / 3));
+    fn calculate_arrival_point_and_direction(&self, point: &Point, direction: &Direction) -> (Point, Direction) {
+        self.jump_map.get(&(point.clone(), direction.clone())).unwrap().clone()
+    }
+}
 
+#[derive(Debug, Clone)]
+struct Square {
+    ll: Point,
+    size: i32,
+}
 
-        if point.y < h_unit {
-            assert!(point.x >= l_unit * 2 && point.x < l_unit * 3);
-            1
-        } else if point.y >= h_unit * 2 {
-            assert!(point.x >= l_unit * 2);
-            if point.x >= l_unit * 3 {
-                6
-            } else {
-                5
-            }
-        } else {
-            assert!(point.y >= l_unit && point.x < l_unit * 3, "{}", format!("Point {:?} does not lie in 2,3 or 4, {:?}", point, l_unit));
-            if point.x < l_unit {
-                2
-            } else if point.x < l_unit * 2 {
-                3
-            } else {
-                4
-            }
+impl Square {
+
+    fn get_edge(&self,
+                edge: Edge) -> Vec<Point> {
+        match edge {
+            Edge::Left => {
+                (0..self.size).into_iter()
+                                .map(|i| {
+                                    Point {
+                                        x: self.ll.x,
+                                        y: self.ll.y - i,
+                                    }
+                                }).collect::<Vec<Point>>()
+            },
+            Edge::Right => {
+                (0..self.size).into_iter()
+                    .map(|i| {
+                        Point {
+                            x: self.ll.x + (self.size - 1),
+                            y: self.ll.y - i,
+                        }
+                    }).collect::<Vec<Point>>()
+            },
+            Edge::Up => {
+                (0..self.size).into_iter()
+                    .map(|i| {
+                        Point {
+                            x: self.ll.x + i,
+                            y: self.ll.y - (self.size - 1),
+                        }
+                    }).collect::<Vec<Point>>()
+            },
+            Edge::Down => {
+                (0..self.size).into_iter()
+                    .map(|i| {
+                        Point {
+                            x: self.ll.x + i,
+                            y: self.ll.y,
+                        }
+                    }).collect::<Vec<Point>>()
+            },
         }
     }
+}
 
-    fn len(&self) -> usize {
-        self.tiles.iter().map(|tile| tile.len()).max().unwrap()
-    }
-
-    fn height(&self) -> usize {
-        self.tiles.len()
-    }
-
-    fn calculate_arrival_point(&self, point: &Point, direction: &Direction) -> (Point, Direction) {
-        (Point { x: 0, y: 0 }, Direction::Left)
-    }
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+enum Edge {
+    Left,
+    Right,
+    Up,
+    Down,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -425,6 +440,13 @@ impl Point {
             Direction::Down => { Point { x: self.x, y: self.y + 1 } },
             Direction::Left => { Point { x: self.x -1, y: self.y } },
             Direction::Right  => { Point { x: self.x + 1, y: self.y } },
+        }
+    }
+
+    fn dxdy(&self, dx: i32, dy: i32) -> Point {
+        Point {
+            x: self.x + dx,
+            y: self.y + dy,
         }
     }
 }
@@ -446,15 +468,6 @@ impl Direction {
             Direction::Right => 0,
         }
 
-    }
-
-    fn inverse(&self) -> Self {
-        match self {
-            Direction::Up => Direction::Down,
-            Direction::Down  => Direction::Up,
-            Direction::Left  => Direction::Right,
-            Direction::Right => Direction::Left,
-        }
     }
 
     fn next(&self, direction: &char) -> Self {
