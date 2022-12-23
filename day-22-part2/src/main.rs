@@ -1,5 +1,6 @@
 extern crate core;
 
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufReader, BufRead};
 use std::env;
@@ -55,6 +56,7 @@ struct Problem {
     position: Point,
     direction: Direction,
     instruction_index: usize,
+    mapped_endpoints: HashMap<(Point, Direction), (Point, Direction)>,
 }
 
 impl Problem {
@@ -69,12 +71,197 @@ impl Problem {
                        .next()
                        .unwrap();
 
+
+        assert_eq!((tiles.iter().map(|tile| tile.len()).max().unwrap() / 4) as i32, (tiles.len() / 4) as i32);
+        let square_size = (tiles.len() / 4) as i32;
+
+        //
+        // 1,(Point { x: 0, y: 4 * h_unit}, Point { x: 1 * w_unit, y: 3 * h_unit}
+        // 2 Point { x: 0, y: 3 * h_unit}, Point { x: w_unit, y: 2 * h_unit})
+        // 3,(Point { x: w_unit, y: 3 * h_unit}, Point { x: 2 * w_unit, y: 2 * h_unit})
+        // 4,(Point { x: w_unit, y: 2 * h_unit}, Point { x: 2 * w_unit, y: 1 * h_unit}) );
+        // 5,(Point { x: w_unit, y: 1 * h_unit}, Point { x: 2 * w_unit, y: 0 }) );
+        // 6,(Point { x: 2 * w_unit, y: 1 * h_unit}, Point { x: 3 * w_unit, y: 0 }) );
+
+        let mut  mapped_endpoints: HashMap<(Point, Direction), (Point, Direction)> = HashMap::new();
+
+        let mut direction: Direction = Direction::Left;
+        let mut outgoing_direction =  Direction::Right;
+
+        // 1 -> 3
+        direction = Direction::Right;
+        outgoing_direction = Direction::Up;
+        for i in 0..square_size {
+            let origin = Point {
+                x: square_size - 1,
+                y: (3 * square_size) + i
+            };
+            let destination = Point {
+                x: square_size + i,
+                y: (3 * square_size)
+            };
+            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
+        }
+
+        // 1 -> 5
+        direction = Direction::Left;
+        outgoing_direction = Direction::Down;
+        for i in 0..square_size {
+            let origin = Point {
+                x: 0,
+                y: (3 * square_size) + i
+            };
+            let destination = Point {
+                x: (square_size * 2) + i,
+                y: (3 * square_size)
+            };
+            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
+        }
+
+        // 1 -> 6
+        direction = Direction::Down;
+        outgoing_direction = Direction::Down;
+        for i in 0..square_size {
+            let origin = Point {
+                x: i,
+                y: (4 * square_size)
+            };
+            let destination = Point {
+                x: (square_size * 3) - 1 - i,
+                y: 0
+            };
+            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
+        }
+
+
+        // 2 -> 5
+        direction = Direction::Left;
+        outgoing_direction = Direction::Right;
+        for i in 0..square_size {
+            let origin = Point {
+                x: 0,
+                y: 2 * square_size + i
+            };
+            let destination = Point {
+                x: square_size,
+                y: square_size - i,
+            };
+            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
+        }
+
+        let TODO_DIRECTION = Direction::Right;
+        let TODO_POINT = Point { x:-1, y:-1};
+
+        // 2 -> 4
+        direction = Direction::Up;
+        outgoing_direction = Direction::Right;
+        for i in 0..square_size {
+            let origin = Point {
+                x: i,
+                y: 2 * square_size
+            };
+            let destination = Point {
+                x: square_size,
+                y:( square_size * 2) - i,
+            };
+            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
+        }
+
+        // 3 -> 1
+        direction = Direction::Down;
+        outgoing_direction = Direction::Left;
+        for i in 0..square_size {
+            let origin = Point {
+                x: square_size+ i,
+                y: 3 * square_size
+            };
+            let destination = Point {
+                x: square_size,
+                y:( square_size * 3) + i,
+            };
+            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
+        }
+
+        // 3 -> 6
+        direction = Direction::Right;
+        outgoing_direction =  Direction::Left;
+        for i in 0..square_size {
+            let origin = TODO_POINT.clone();
+            let destination = TODO_POINT.clone();
+            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
+        }
+
+        // 4 -> ?
+        direction = Direction::Left;
+        outgoing_direction = TODO_DIRECTION.clone();
+        for i in 0..square_size {
+            let origin = TODO_POINT.clone();
+            let destination = TODO_POINT.clone();
+            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
+        }
+
+        // 4 -> ?
+        direction = Direction::Right;
+        outgoing_direction = TODO_DIRECTION.clone();
+        for i in 0..square_size {
+            let origin = TODO_POINT.clone();
+            let destination = TODO_POINT.clone();
+            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
+        }
+
+        // 5 -> ?
+        direction = Direction::Left;
+        outgoing_direction = TODO_DIRECTION.clone();
+        for i in 0..square_size {
+            let origin = TODO_POINT.clone();
+            let destination = TODO_POINT.clone();
+            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
+        }
+
+        // 5 -> ?
+        direction = Direction::Up;
+        outgoing_direction = TODO_DIRECTION.clone();
+        for i in 0..square_size {
+            let origin = TODO_POINT.clone();
+            let destination = TODO_POINT.clone();
+            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
+        }
+
+        // 6 -> ?
+        direction = Direction::Up;
+        outgoing_direction = TODO_DIRECTION.clone();
+        for i in 0..square_size {
+            let origin = TODO_POINT.clone();
+            let destination = TODO_POINT.clone();
+            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
+        }
+
+        // 6 -> ?
+        direction = Direction::Right;
+        outgoing_direction = TODO_DIRECTION.clone();
+        for i in 0..square_size {
+            let origin = TODO_POINT.clone();
+            let destination = TODO_POINT.clone();
+            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
+        }
+
+        // 6 -> ?
+        direction = Direction::Down;
+        outgoing_direction = TODO_DIRECTION.clone();
+        for i in 0..square_size {
+            let origin = TODO_POINT.clone();
+            let destination = TODO_POINT.clone();
+            mapped_endpoints.insert((origin, direction.clone()), (destination, outgoing_direction.clone()) );
+        }
+
+
         Problem {
             tiles,
             input,
             position: Point { x, y },
             direction: Direction::Right,
             instruction_index: 0,
+            mapped_endpoints,
         }
     }
 
@@ -127,10 +314,6 @@ impl Problem {
             }
         } else {
             self.direction = self.direction.next(&self.input[self.instruction_index]);
-
-            // println!("Moving to the {:?} direction is now {:?}",
-            //         &self.input[self.instruction_index],
-            //         self.direction);
 
             self.instruction_index = self.instruction_index + 1;
         }
@@ -191,7 +374,7 @@ impl Problem {
         assert!(!self.is_off_map(point));
         let l_unit = (self.len() / 4) as i32;
         let h_unit = (self.height() / 3) as i32;
-        assert_eq!( (self.len() / 4), (self.height() / 3));
+        //assert_eq!( (self.len() / 4), (self.height() / 3));
 
 
         if point.y < h_unit {
@@ -225,277 +408,7 @@ impl Problem {
     }
 
     fn calculate_arrival_point(&self, point: &Point, direction: &Direction) -> (Point, Direction) {
-        let w_unit = (self.len() / 4) as i32;
-        let h_unit = (self.height() / 3) as i32;
-        let face = self.calculate_face_of_cube(point);
-
-        println!("Calculating the next entry point for point:{:?} on face: {:?} with direction:{:?} ..",
-                 point,
-                 face,
-                 direction);
-        assert!(self.is_off_map(&point.next(direction)));
-        assert_eq!(w_unit, h_unit);
-        match face {
-            1 => {
-                match direction {
-
-                    Direction::Up => {
-                        // 1 -> 2
-                        let offset  = point.x - (3 * w_unit);
-                        assert!(offset < w_unit && offset >= 0);
-                        let entry_point = Point {
-                            x: offset,
-                            y: h_unit
-                        };
-                        let direction = Direction::Down;
-                        println!("\t --> {:?} on surface ({:?}) with direction {:?} ..",
-                                 entry_point,
-                                 self.calculate_face_of_cube(&entry_point),
-                                 direction);
-                        assert_eq!(self.calculate_face_of_cube(&entry_point), 2);
-                        (entry_point, direction)
-                    },
-                    Direction::Left => {
-                        // 1 -> 3
-                        let offset = point.y;
-                        assert!(offset < w_unit && offset >= 0);
-                        let entry_point = Point {
-                            x: h_unit + offset,
-                            y: h_unit,
-                        };
-                        let direction = Direction::Down;
-                        println!("\t --> {:?} on surface ({:?}) with direction {:?} ..",
-                                 entry_point,
-                                 self.calculate_face_of_cube(&entry_point),
-                                 direction);
-                        assert_eq!(self.calculate_face_of_cube(&entry_point), 3);
-                        (entry_point, direction)
-                    },
-                    Direction::Right => {
-                        // 1 -> 6
-                        let offset = h_unit - point.y - 1;
-                        assert!(offset < w_unit && offset >= 0);
-                        let entry_point = Point {
-                            x: 2 * w_unit + offset,
-                            y: 2 * h_unit,
-                        };
-                        let direction = Direction::Left;
-                        println!("\t --> {:?} on surface ({:?}) with direction {:?} ..",
-                                 entry_point,
-                                 self.calculate_face_of_cube(&entry_point),
-                                 direction);
-                        assert_eq!(self.calculate_face_of_cube(&entry_point), 6);
-                        (entry_point, direction)
-                    },
-                    _ => panic!("Should be unreachable for direction {:?}", direction)
-                }
-            },
-            2 => {
-                match direction {
-                    Direction::Up => {
-                        // 2 -> 1
-                        let offset = point.x;
-                        assert!(offset < w_unit && offset >= 0);
-                        let entry_point = Point {
-                            x: 3 * w_unit - 1 - offset,
-                            y: 0,
-                        };
-                        let direction = Direction::Down;
-                        println!("\t --> {:?} on surface ({:?}) with direction {:?} ..",
-                                 entry_point,
-                                 self.calculate_face_of_cube(&entry_point),
-                                 direction);
-                        assert_eq!(self.calculate_face_of_cube(&entry_point), 6);
-                        (entry_point, direction)
-                    },
-                    Direction::Down => {
-                        // 2 -> 5
-                        let offset = w_unit - point.x - 1;
-                        assert!(offset < w_unit && offset >= 0);
-                        let entry_point = Point {
-                            x: 2 * w_unit + offset,
-                            y: ((self.height() -1) as i32)
-                        };
-                        let direction = Direction::Up;
-                        println!("\t --> {:?} on surface ({:?}) with direction {:?} ..",
-                                 entry_point,
-                                 self.calculate_face_of_cube(&entry_point),
-                                 direction);
-                        assert_eq!(self.calculate_face_of_cube(&entry_point), 5);
-                        (entry_point, direction)
-                    },
-                    Direction::Left => {
-                        // 2 -> 6
-                        let offset = point.y - w_unit - 1;
-                        assert!(offset < w_unit && offset >= 0);
-                        let entry_point = Point {
-                            x: (self.len() - 1) as i32,
-                            y: 2 * w_unit -1 + offset,
-
-                        };
-                        let direction = Direction::Up;
-                        println!("\t --> {:?} on surface ({:?}) with direction {:?} ..",
-                                 entry_point,
-                                 self.calculate_face_of_cube(&entry_point),
-                                 direction);
-                        assert_eq!(self.calculate_face_of_cube(&entry_point), 6);
-                        (entry_point, direction)
-                    },
-                    _ => panic!("Should be unreachable for direction {:?}", direction)
-                }
-            },
-            3 => {
-                match direction {
-                    Direction::Up => {
-                        // 3 -> 1
-                        let offset = point.x - w_unit;
-                        assert!(offset < w_unit && offset >= 0);
-                        let entry_point = Point {
-                            x: 2 * w_unit,
-                            y: offset,
-                        };
-                        let direction = Direction::Right;
-                        println!("\t generated {:?} ..",entry_point);
-
-                        println!("\t --> {:?} on surface ({:?}) with direction {:?} ..",
-                                 entry_point,
-                                 self.calculate_face_of_cube(&entry_point),
-                                 direction);
-                        assert_eq!(self.calculate_face_of_cube(&entry_point), 1);
-                        (entry_point, direction)
-                    },
-                    Direction::Down => {
-                        // 3 -> 5
-                        let offset = (2 * w_unit -1) -  point.x;
-                        assert!(offset < w_unit && offset >= 0);
-                        let entry_point = Point {
-                            x: 2 * w_unit,
-                            y: (2 * h_unit) + offset,
-                        };
-                        let direction = Direction::Right;
-                        println!("\t --> {:?} on surface ({:?}) with direction {:?} ..",
-                                 entry_point,
-                                 self.calculate_face_of_cube(&entry_point),
-                                 direction);
-                        assert_eq!(self.calculate_face_of_cube(&entry_point), 5);
-                        (entry_point, direction)
-                    },
-                    _ => panic!("Should be unreachable for direction {:?}", direction)
-                }
-            },
-            4 => {
-                match direction {
-                    Direction::Right => {
-                        // 4 -> 6
-                        let offset = point.y - h_unit;
-                        assert!(offset < w_unit && offset >= 0);
-                        let entry_point = Point {
-                            x: (self.len() as i32) - 1 - offset,
-                            y: (2 * h_unit),
-                        };
-                        let direction = Direction::Down;
-                        println!("\t --> {:?} on surface ({:?}) with direction {:?} ..",
-                                 entry_point,
-                                 self.calculate_face_of_cube(&entry_point),
-                                 direction);
-                        assert_eq!(self.calculate_face_of_cube(&entry_point), 6);
-                        (entry_point, direction)
-                    },
-                    _ => panic!("Should be unreachable for direction {:?}", direction)
-                }
-            },
-            5 => {
-                match direction {
-                    Direction::Down => {
-                        // 5 -> 2
-                        let offset = point.x - 2 * w_unit - 1;
-                        assert!(offset < w_unit && offset >= 0);
-                        let entry_point = Point {
-                            x: offset,
-                            y: w_unit * 2 -1,
-                        };
-                        let direction = Direction::Up;
-                        println!("\t --> {:?} on surface ({:?}) with direction {:?} ..",
-                                 entry_point,
-                                 self.calculate_face_of_cube(&entry_point),
-                                 direction);
-                        assert_eq!(self.calculate_face_of_cube(&entry_point), 2);
-                        (entry_point, direction)
-                    },
-                    Direction::Left => {
-                        // 5 -> 3
-                        let offset = point.y - (3 * h_unit - 1);
-                        assert!(offset < w_unit && offset >= 0);
-                        let entry_point = Point {
-                            x:  w_unit + offset,
-                            y: w_unit * 2 - 1,
-                        };
-                        let direction = Direction::Up;
-                        println!("\t --> {:?} on surface ({:?}) with direction {:?} ..",
-                                 entry_point,
-                                 self.calculate_face_of_cube(&entry_point),
-                                 direction);
-                        assert_eq!(self.calculate_face_of_cube(&entry_point), 3);
-                        (entry_point, direction)
-                    },
-                    _ => panic!("Should be unreachable for direction {:?}", direction)
-                }
-            },
-            6 => {
-                match direction {
-                    Direction::Up => {
-                        // 6 -> 4
-                        let offset = point.x - 3 * w_unit;
-                        assert!(offset < w_unit && offset >= 0);
-                        let entry_point = Point {
-                            x: 3 * w_unit - 1,
-                            y: 2 * h_unit - 1 - offset,
-                        };
-                        let direction = Direction::Left;
-                        println!("\t --> {:?} on surface ({:?}) with direction {:?} ..",
-                                 entry_point,
-                                 self.calculate_face_of_cube(&entry_point),
-                                 direction);
-                        assert_eq!(self.calculate_face_of_cube(&entry_point), 4);
-                        (entry_point, direction)
-                    },
-                    Direction::Down => {
-                        // 6 -> 2
-                        let offset = point.x - (3 * w_unit);
-                        assert!(offset < w_unit && offset >= 0);
-                        let entry_point = Point {
-                            x: 0,
-                            y: 2 * w_unit - offset -1,
-                        };
-                        let direction = Direction::Right;
-                        println!("\t --> {:?} on surface ({:?}) with direction {:?} ..",
-                                 entry_point,
-                                 self.calculate_face_of_cube(&entry_point),
-                                 direction);
-                        assert_eq!(self.calculate_face_of_cube(&entry_point), 2);
-                        (entry_point, direction)
-                    },
-                    Direction::Right => {
-                        // 6 -> 1
-                        let offset = point.y - (2 * h_unit);
-                        assert!(offset < w_unit && offset >= 0);
-                        let entry_point = Point {
-                            x: 3 * w_unit - 1,
-                            y: w_unit - offset - 1,
-                        };
-                        let direction = Direction::Left;
-                        println!("\t --> {:?} on surface ({:?}) with direction {:?} ..",
-                                 entry_point,
-                                 self.calculate_face_of_cube(&entry_point),
-                                 direction);
-                        assert_eq!(self.calculate_face_of_cube(&entry_point), 1);
-                        (entry_point, direction)
-                    },
-                    _ => panic!("Should be unreachable for direction {:?}", direction)
-                }
-            },
-            _ => panic!("Should be unreachable face: {:?}", face)
-        }
+        (Point { x: 0, y: 0 }, Direction::Left)
     }
 }
 
