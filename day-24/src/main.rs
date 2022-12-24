@@ -7,12 +7,10 @@ fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let initial_state = read_input(&args[1])?;
     let mut state_2_lb: HashMap<State, usize> = HashMap::new();
-    let mut terminating_states: HashSet<State> =  HashSet::new();
 
     println!("{:?} is the fewest number of minutes required to avoid the blizzards and reach the goal",
              solve1(initial_state.clone(),
                                0,
-                               &mut terminating_states,
                                &mut state_2_lb));
 
     Ok(())
@@ -20,20 +18,11 @@ fn main() -> io::Result<()> {
 
 fn solve1(state: State,
           moves_made: usize,
-          terminating_states: &mut HashSet<State>,
           state_2_lb: &mut HashMap<State, usize>) -> usize {
-
-    // println!("Considering state: {:?}, moves_made:{:?} ..", state.my_current_location, moves_made);
-
-    if terminating_states.contains(&state) {
-        // println!("\tIs terminated before ..");
-        return usize::MAX
-    }
 
     let known_lb = *state_2_lb.get(&state).unwrap_or(&usize::MAX);
 
-    if known_lb < moves_made {
-        // println!("\tBetter Lb found ..");
+    if known_lb < moves_made  {
         return usize::MAX
     }
 
@@ -53,13 +42,9 @@ fn solve1(state: State,
 
         let next_state = state.next(possible_move);
 
-        if terminating_states.contains(&next_state) {
-            // println!("\t\tState is known to be terminating");
-            continue
-        }
 
         let known_lb = *state_2_lb.get(&next_state).unwrap_or(&usize::MAX);
-        if known_lb <= moves_made + 1 {
+        if known_lb <= moves_made + 1  {
             // println!("\t\tBetter LB known!");
             continue
         } else {
@@ -75,17 +60,27 @@ fn solve1(state: State,
     }
 
     if children.is_empty() {
-        // println!("\tNo path forward!");
-        terminating_states.insert(state.clone());
+        state_2_lb.insert(state.clone(), 0);
         return usize::MAX
     } else {
-        // println!("\tEvaluating Children!");
-        children.into_iter()
-                .map(|child| {
-                    solve1(child, moves_made + 1, terminating_states, state_2_lb)
-                })
-                .min()
-                .unwrap()
+
+        // Add a heuristic. We want to go towards the endpoint
+        children.sort_by( |a, b| {
+            a.distance_from_end_state().cmp(&b.distance_from_end_state())
+        }) ;
+
+
+        let min =
+            children.into_iter()
+                    .map(|child| {
+                        solve1(child, moves_made + 1, state_2_lb)
+                    })
+                    .min()
+                    .unwrap();
+
+        state_2_lb.insert(state.clone(), min);
+
+        min
     }
 }
 
@@ -190,6 +185,10 @@ impl State {
         return self.my_current_location == self.end;
     }
 
+    fn distance_from_end_state(&self) -> usize {
+        self.my_current_location.distance(&self.end) as usize
+    }
+
     fn calculate_next_blizzards(&self) -> BTreeSet<Blizzard>  {
         let mut next_blizzards : BTreeSet<Blizzard> = BTreeSet::new();
 
@@ -269,6 +268,10 @@ impl Point {
             x: self.x + dxdy.0,
             y: self.y + dxdy.1,
         }
+    }
+
+    fn distance(&self, other: &Point) -> i32 {
+        (self.x - other.x).abs() + (self.y - other.y).abs()
     }
 
     fn point_in_direction(&self, direction: &Direction) -> Point {
