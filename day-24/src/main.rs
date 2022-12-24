@@ -1,19 +1,95 @@
-use std::collections::BTreeSet;  // If we want to hash states we need order stuff
+use std::collections::{BTreeSet, HashMap, HashSet};  // If we want to hash states we need order stuff
 use std::fs::File;
 use std::io::{self, BufReader, BufRead};
 use std::env;
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
-    let problem  = read_input(&args[1])?;
+    let initial_state = read_input(&args[1])?;
+    let mut state_2_lb: HashMap<State, usize> = HashMap::new();
+    let mut terminating_states: HashSet<State> =  HashSet::new();
 
     println!("{:?} is the fewest number of minutes required to avoid the blizzards and reach the goal",
-             0);
+             solve1(initial_state.clone(),
+                               0,
+                               &mut terminating_states,
+                               &mut state_2_lb));
 
     Ok(())
 }
 
-fn read_input(filename: &String) -> io::Result<ProblemState> {
+fn solve1(state: State,
+          moves_made: usize,
+          terminating_states: &mut HashSet<State>,
+          state_2_lb: &mut HashMap<State, usize>) -> usize {
+
+    // println!("Considering state: {:?}, moves_made:{:?} ..", state.my_current_location, moves_made);
+
+    if terminating_states.contains(&state) {
+        // println!("\tIs terminated before ..");
+        return usize::MAX
+    }
+
+    let known_lb = *state_2_lb.get(&state).unwrap_or(&usize::MAX);
+
+    if known_lb < moves_made {
+        // println!("\tBetter Lb found ..");
+        return usize::MAX
+    }
+
+    state_2_lb.insert(state.clone(), moves_made);
+
+    let mut children: Vec<State> = vec!();
+
+    let next_blizzard = state.calculate_next_blizzards();
+
+    for possible_move in state.possible_moves() {
+
+        // println!("\tConsidering move {:?} ..", possible_move);
+        if next_blizzard.iter().any(|blizzard| blizzard.point == possible_move) {
+            // println!("\t\tIs in blizzard ..");
+            continue
+        }
+
+        let next_state = state.next(possible_move);
+
+        if terminating_states.contains(&next_state) {
+            // println!("\t\tState is known to be terminating");
+            continue
+        }
+
+        let known_lb = *state_2_lb.get(&next_state).unwrap_or(&usize::MAX);
+        if known_lb <= moves_made + 1 {
+            // println!("\t\tBetter LB known!");
+            continue
+        } else {
+            state_2_lb.insert(next_state.clone(), moves_made + 1);
+        }
+
+        if next_state.in_end_state() {
+            // println!("\t\tFound a sollution!");
+            return moves_made + 1;
+        }
+
+        children.push(next_state)
+    }
+
+    if children.is_empty() {
+        // println!("\tNo path forward!");
+        terminating_states.insert(state.clone());
+        return usize::MAX
+    } else {
+        // println!("\tEvaluating Children!");
+        children.into_iter()
+                .map(|child| {
+                    solve1(child, moves_made + 1, terminating_states, state_2_lb)
+                })
+                .min()
+                .unwrap()
+    }
+}
+
+fn read_input(filename: &String) -> io::Result<State> {
     let file_in = File::open(filename)?;
 
     let lines =
@@ -70,7 +146,7 @@ fn read_input(filename: &String) -> io::Result<ProblemState> {
         }
     }
 
-    let problem_state = ProblemState {
+    let problem_state = State {
         width,
         height,
         walls,
@@ -84,7 +160,7 @@ fn read_input(filename: &String) -> io::Result<ProblemState> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct ProblemState {
+struct State {
     width: i32,
     height: i32,
     walls: BTreeSet<Point>,
@@ -94,52 +170,83 @@ struct ProblemState {
     start: Point,
 }
 
-impl ProblemState {
+impl State {
 
-    fn step(&mut self) -> bool {
-        let next_blizzards : BTreeSet<Blizzard> = BTreeSet::new();
+    fn possible_moves(&self) -> Vec<Point> {
+        self.my_current_location
+            .neighbours_including_self()
+            .into_iter()
+            .filter(|point|{
+                point.x >= 0
+                && point.x < self.width
+                && point.y >= 0
+                && point.y < self.height
+                && !self.walls.contains(point)
+            })
+            .collect::<Vec<Point>>()
+    }
+
+    fn in_end_state(&self) -> bool {
+        return self.my_current_location == self.end;
+    }
+
+    fn calculate_next_blizzards(&self) -> BTreeSet<Blizzard>  {
+        let mut next_blizzards : BTreeSet<Blizzard> = BTreeSet::new();
+
+        assert!(!self.walls.contains(&self.my_current_location));
+        assert!(self.my_current_location.x >= 0 && self.my_current_location.x < self.width);
+        assert!(self.my_current_location.y >= 0 && self.my_current_location.y < self.height);
 
         for blizzard in self.blizzards.iter() {
             let next_point = blizzard.point.point_in_direction(&blizzard.direction);
             assert_ne!(next_point, self.start);
-            let next_point =
+
+            let next_blizzard: Blizzard =
                 if self.walls.contains(&next_point) {
-                    match &blizzard.direction {
-                        Direction::Up =>  Point {
-                            x: next_point.x,
-                            y: self.height - 2,
-                        },
-                        Direction::Down  => Point {
-                            x: next_point.x,
-                            y: 1,
-                        },
-                        Direction::Left  => Point {
-                            x: self.width - 2,
-                            y: next_point.y,
-                        },
-                        Direction::Right  => Point {
-                            x: 1,
-                            y: next_point.y,
-                        },
+                    let point =
+                        match &blizzard.direction {
+                            Direction::Up => Point {
+                                    x: next_point.x,
+                                    y: self.height - 2,
+                            },
+                            Direction::Down  => Point {
+                                x: next_point.x,
+                                y: 1,
+                            },
+                            Direction::Left  => Point {
+                                x: self.width - 2,
+                                y: next_point.y,
+                            },
+                            Direction::Right  => Point {
+                                x: 1,
+                                y: next_point.y,
+                            },
+                        };
+                    Blizzard {
+                        direction: blizzard.direction.clone(),
+                        point,
                     }
                 } else {
-                    next_point
+                    Blizzard {
+                        direction: blizzard.direction.clone(),
+                        point: next_point
+                    }
                 }
             ;
-            if next_point == self.my_current_location {
-                // Player got killed
-                return false;
-            }
+            // println!("{:?} -> {:?} ..", blizzard, next_blizzard);
+            next_blizzards.insert(next_blizzard);
         };
 
-        self.blizzards = next_blizzards;
+        assert_eq!(self.blizzards.len(), next_blizzards.len());
 
-        true
+        next_blizzards
     }
 
-    fn player_can_move(&self, point: &Point) -> bool {
-        !self.walls.contains(point)
-        && !self.blizzards.iter().any (|blizzard| &blizzard.point == point)
+    fn next(&self, next_location: Point) -> Self  {
+        let mut next_state = self.clone();
+        next_state.my_current_location = next_location;
+        next_state.blizzards = self.calculate_next_blizzards();
+        next_state
     }
 }
 
@@ -168,8 +275,9 @@ impl Point {
         self.dxdy(direction.to_dxdy())
     }
 
-    fn neighbours(&self) -> Vec<Point> {
+    fn neighbours_including_self(&self) -> Vec<Point> {
         vec!(
+            self.clone(),
             self.point_in_direction(&Direction::Up),
             self.point_in_direction(&Direction::Down),
             self.point_in_direction(&Direction::Left),
