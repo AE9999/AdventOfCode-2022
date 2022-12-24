@@ -7,46 +7,45 @@ use std::env;
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let initial_state = read_input(&args[1])?;
-    let mut state_2_lb: HashMap<State, usize> = HashMap::new();
-    let mut state_2_solved_distance: HashMap<State, usize> = HashMap::new();
-    let mut lb_for_point: HashMap<Point, usize> = HashMap::new();
+
+    // let x = initial_state.get_eq();
 
     println!("{:?} is the fewest number of minutes required to avoid the blizzards and reach the goal",
              solve1(initial_state.clone(),
                                0,
-                               &mut state_2_solved_distance,
-                               &mut state_2_lb,
-                    &mut lb_for_point));
+                               &mut GlobalStats::new()));
 
     Ok(())
 }
 
 fn solve1(state: State,
           moves_made: usize,
-          state_2_solved_distance: &mut HashMap<State, usize>,
-          state_2_lb: &mut HashMap<State, usize>,
-          lb_for_points: &mut HashMap<Point, usize>) -> usize {
+          global_stats: &mut GlobalStats) -> usize {
 
-    println!("Considering {:?}, moves_made {:?} ..", state.my_current_location, moves_made);
+    // println!("Considering {:?}, moves_made {:?} ..", state.my_current_location, moves_made);
 
-    if state_2_solved_distance.contains_key(&state) {
+    if moves_made + state.distance_from_end_state() >= global_stats.global_lb {
+        return usize::MAX;
+    }
+
+    if global_stats.state_2_solved_distance.contains_key(&state) {
         // println!("\tAlready solved {:?} ..", state.my_current_location);
-        return  *state_2_solved_distance.get(&state).unwrap()
+        return  *global_stats.state_2_solved_distance.get(&state).unwrap()
     }
 
     let lb_for_point =
-        *lb_for_points.get(&state.my_current_location).unwrap_or(&usize::MAX);
+        global_stats.lb_for_points.get(&state.my_current_location).unwrap_or(&usize::MAX);
 
-    if moves_made + state.distance_from_end_state() >= lb_for_point {
+    if moves_made + state.distance_from_end_state() >= *lb_for_point {
         return usize::MAX
     }
 
-    let known_lb = *state_2_lb.get(&state).unwrap_or(&usize::MAX);
+    let known_lb = *global_stats.state_2_lb.get(&state).unwrap_or(&usize::MAX);
     if known_lb < moves_made  {
         // println!("\tA better solution is already being calculated {:?} ..", state.my_current_location);
         return usize::MAX
     }
-    state_2_lb.insert(state.clone(), moves_made);
+    global_stats.state_2_lb.insert(state.clone(), moves_made);
 
     let mut children: Vec<State> = vec!();
 
@@ -61,27 +60,28 @@ fn solve1(state: State,
 
         let next_state = state.next(possible_move);
 
-        let known_lb = *state_2_lb.get(&next_state).unwrap_or(&usize::MAX);
+        let known_lb = *global_stats.state_2_lb.get(&next_state).unwrap_or(&usize::MAX);
         if known_lb < moves_made   {
             // println!("\t\t We have a quicker way to get there :-) ..");
             continue
         } else {
-            state_2_lb.insert(next_state.clone(), moves_made + 1);
+            global_stats.state_2_lb.insert(next_state.clone(), moves_made + 1);
         }
 
         if next_state.in_end_state() {
-            // println!("\t\t Solution found! :-) ..");
 
             let answer = moves_made + 1;
 
-            state_2_solved_distance.insert( state.clone(), answer);
+            println!("\t\t Solution {:?} found! :-) ..", answer);
+
+            global_stats.global_lb = answer;
 
             let lb_for_point =
-                *lb_for_points.get(&state.my_current_location).unwrap_or(&usize::MAX);
+                *global_stats.lb_for_points.get(&state.my_current_location).unwrap_or(&usize::MAX);
 
             let lb_for_point = min(answer, lb_for_point);
 
-            lb_for_points.insert(state.my_current_location.clone(), lb_for_point);
+            global_stats.lb_for_points.insert(state.my_current_location.clone(), lb_for_point);
 
             return answer;
         }
@@ -90,9 +90,9 @@ fn solve1(state: State,
     }
 
     if children.is_empty() {
-        // state_2_lb.insert(state.clone(), 0);
+        global_stats.state_2_lb.insert(state.clone(), 0);
         // println!("\t No children to evaluate :-) ..");
-        state_2_solved_distance.insert(state.clone(), usize::MAX);
+        global_stats.state_2_solved_distance.insert(state.clone(), usize::MAX);
         return usize::MAX
     } else {
 
@@ -108,18 +108,16 @@ fn solve1(state: State,
                         let answer =
                             solve1(child.clone(),
                                    moves_made + 1,
-                                   state_2_solved_distance,
-                                   state_2_lb,
-                                   lb_for_points);
+                                   global_stats);
 
                         let lb_for_point =
-                            *lb_for_points.get(&child.my_current_location).unwrap_or(&usize::MAX);
+                            *global_stats.lb_for_points.get(&child.my_current_location).unwrap_or(&usize::MAX);
 
                         let lb_for_point = min(answer, lb_for_point);
 
-                        lb_for_points.insert(child.my_current_location.clone(), lb_for_point);
+                        global_stats.lb_for_points.insert(child.my_current_location.clone(), lb_for_point);
 
-                        state_2_solved_distance.insert(child, answer);
+                        global_stats.state_2_solved_distance.insert(child, answer);
 
                         answer
 
@@ -128,13 +126,13 @@ fn solve1(state: State,
                     .unwrap();
 
         let lb_for_point =
-            *lb_for_points.get(&state.my_current_location).unwrap_or(&usize::MAX);
+            *global_stats.lb_for_points.get(&state.my_current_location).unwrap_or(&usize::MAX);
 
         let lb_for_point = min(min_distance, lb_for_point);
 
-        lb_for_points.insert(state.my_current_location.clone(), lb_for_point);
+        global_stats.lb_for_points.insert(state.my_current_location.clone(), lb_for_point);
 
-        state_2_solved_distance.insert(state.clone(), min_distance);
+        global_stats.state_2_solved_distance.insert(state.clone(), min_distance);
 
         min_distance
     }
@@ -208,6 +206,24 @@ fn read_input(filename: &String) -> io::Result<State> {
     };
 
     Ok(problem_state)
+}
+
+struct GlobalStats {
+    state_2_lb: HashMap<State, usize>,
+    state_2_solved_distance: HashMap<State, usize>,
+    lb_for_points: HashMap<Point, usize>,
+    global_lb: usize,
+}
+
+impl GlobalStats {
+    fn new() -> Self {
+        GlobalStats {
+            state_2_lb: HashMap::new(),
+            state_2_solved_distance: HashMap::new(),
+            lb_for_points: HashMap::new(),
+            global_lb: usize::MAX,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -303,6 +319,10 @@ impl State {
         next_state.blizzards = self.calculate_next_blizzards();
         next_state
     }
+
+    // fn get_eq(&mut self) {
+    //
+    // }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
