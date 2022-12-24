@@ -1,87 +1,90 @@
+extern crate core;
+
 use std::cmp::min;
-use std::collections::{BTreeSet, HashMap, HashSet};  // If we want to hash states we need order stuff
+use std::collections::{BTreeSet, HashMap};  // If we want to hash states we need order stuff
 use std::fs::File;
 use std::io::{self, BufReader, BufRead};
 use std::env;
+use std::sync::atomic::Ordering::Release;
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let initial_state = read_input(&args[1])?;
 
-    // let x = initial_state.get_eq();
+    let snowstorm_phase = calculate_snowstorm_phase(initial_state.clone());
 
-    println!("{:?} is the fewest number of minutes required to avoid the blizzards and reach the goal",
-             solve1(initial_state.clone(),
-                               0,
-                               &mut GlobalStats::new()));
+    println!("The snowstorm phase for our problems is {:?} ", snowstorm_phase);
+
+    // println!("{:?} is the fewest number of minutes required to avoid the blizzards and reach the goal",
+    //          solve1(initial_state.clone(),
+    //             &mut GlobalStats::new(snowstorm_phase)));
+
+    println!("{:?} is the fewest number of minutes required to reach the goal, go back to the start, then reach the goal again",
+            solve2(initial_state.clone(),
+                   &mut GlobalStats::new(snowstorm_phase)));
 
     Ok(())
 }
 
 fn solve1(state: State,
-          moves_made: usize,
           global_stats: &mut GlobalStats) -> usize {
 
-    // println!("Considering {:?}, moves_made {:?} ..", state.my_current_location, moves_made);
-
-    if moves_made + state.distance_from_end_state() >= global_stats.global_lb {
+    if state.moves_made + state.distance_from_end_state() >= global_stats.global_lb {
         return usize::MAX;
     }
 
-    if global_stats.state_2_solved_distance.contains_key(&state) {
-        // println!("\tAlready solved {:?} ..", state.my_current_location);
-        return  *global_stats.state_2_solved_distance.get(&state).unwrap()
+    if global_stats.state_2_known_distance.contains_key(&global_stats.state_to_hash(&state)) {
+        let offset = *global_stats.state_2_known_distance.get(&global_stats.state_to_hash(&state)).unwrap();
+        return if offset == usize::MAX {
+                    offset
+                }
+                else {
+                    offset + state.moves_made
+                }
     }
 
     let lb_for_point =
         global_stats.lb_for_points.get(&state.my_current_location).unwrap_or(&usize::MAX);
 
-    if moves_made + state.distance_from_end_state() >= *lb_for_point {
+    if state.moves_made + state.distance_from_end_state() >= *lb_for_point {
         return usize::MAX
     }
 
-    let known_lb = *global_stats.state_2_lb.get(&state).unwrap_or(&usize::MAX);
-    if known_lb < moves_made  {
+    let known_lb = *global_stats.state_2_lb.get(&global_stats.state_to_hash(&state)).unwrap_or(&usize::MAX);
+    if known_lb < state.moves_made  {
         // println!("\tA better solution is already being calculated {:?} ..", state.my_current_location);
         return usize::MAX
     }
-    global_stats.state_2_lb.insert(state.clone(), moves_made);
+
+    global_stats.state_2_lb.insert(global_stats.state_to_hash(&state), state.moves_made);
 
     let mut children: Vec<State> = vec!();
 
     let next_blizzard = state.calculate_next_blizzards();
 
     for possible_move in state.possible_moves() {
-        // println!("\t Considering move {:?} ..", possible_move);
         if next_blizzard.iter().any(|blizzard| blizzard.point == possible_move) {
-            // println!("\t\t In blizzard :-( ..");
             continue
         }
 
-        let next_state = state.next(possible_move);
+        let next_state = state.next_step(possible_move);
 
-        let known_lb = *global_stats.state_2_lb.get(&next_state).unwrap_or(&usize::MAX);
-        if known_lb < moves_made   {
-            // println!("\t\t We have a quicker way to get there :-) ..");
+        let known_lb = *global_stats.state_2_lb.get(&global_stats.state_to_hash(&next_state)).unwrap_or(&usize::MAX);
+        if known_lb < state.moves_made   {
             continue
         } else {
-            global_stats.state_2_lb.insert(next_state.clone(), moves_made + 1);
+            global_stats.state_2_lb.insert(global_stats.state_to_hash(&next_state), next_state.moves_made);
         }
 
         if next_state.in_end_state() {
+            let answer = next_state.moves_made;
 
-            let answer = moves_made + 1;
+            // println!("\t\t Solution {:?} found! :-) ..", answer);
 
-            println!("\t\t Solution {:?} found! :-) ..", answer);
-
+            assert!(global_stats.global_lb > answer);
             global_stats.global_lb = answer;
 
-            let lb_for_point =
-                *global_stats.lb_for_points.get(&state.my_current_location).unwrap_or(&usize::MAX);
-
-            let lb_for_point = min(answer, lb_for_point);
-
-            global_stats.lb_for_points.insert(state.my_current_location.clone(), lb_for_point);
+            global_stats.lb_for_points.insert(state.my_current_location.clone(), answer);
 
             return answer;
         }
@@ -90,9 +93,9 @@ fn solve1(state: State,
     }
 
     if children.is_empty() {
-        global_stats.state_2_lb.insert(state.clone(), 0);
+        // global_stats.state_2_lb.insert(global_stats.state_to_hash(&state), 0);
         // println!("\t No children to evaluate :-) ..");
-        global_stats.state_2_solved_distance.insert(state.clone(), usize::MAX);
+        global_stats.state_2_known_distance.insert(global_stats.state_to_hash(&state), usize::MAX);
         return usize::MAX
     } else {
 
@@ -101,23 +104,12 @@ fn solve1(state: State,
             a.distance_from_end_state().cmp(&b.distance_from_end_state())
         }) ;
 
-
         let min_distance =
             children.into_iter()
                     .map(|child| {
                         let answer =
                             solve1(child.clone(),
-                                   moves_made + 1,
                                    global_stats);
-
-                        let lb_for_point =
-                            *global_stats.lb_for_points.get(&child.my_current_location).unwrap_or(&usize::MAX);
-
-                        let lb_for_point = min(answer, lb_for_point);
-
-                        global_stats.lb_for_points.insert(child.my_current_location.clone(), lb_for_point);
-
-                        global_stats.state_2_solved_distance.insert(child, answer);
 
                         answer
 
@@ -132,9 +124,57 @@ fn solve1(state: State,
 
         global_stats.lb_for_points.insert(state.my_current_location.clone(), lb_for_point);
 
-        global_stats.state_2_solved_distance.insert(state.clone(), min_distance);
+        global_stats.state_2_known_distance.insert(global_stats.state_to_hash(&state), min_distance - state.moves_made);
 
         min_distance
+    }
+}
+
+// 1440 is too high
+// 723 is too high
+fn solve2(heen_state: State,
+          global_stats: &mut GlobalStats) -> usize {
+
+    let amount_heen =
+        solve1(heen_state.clone(),
+          &mut global_stats.clone());
+
+    println!("Amount heen was {:?} ..", amount_heen);
+
+    let mut terug_state = heen_state.reverse_start_and_end();
+    for _ in 0..amount_heen {
+        terug_state = terug_state.let_blizzard_blow();
+    }
+
+    let amount_terug =
+        solve1(terug_state.clone(),
+               &mut global_stats.clone());
+    println!("Amount terug was {:?} ..", amount_terug);
+
+
+    let mut en_weer_heen_state = heen_state.clone();
+    for _ in 0..(amount_heen + amount_terug) {
+        en_weer_heen_state = en_weer_heen_state.let_blizzard_blow();
+    }
+    let amount_en_weer_heen =
+        solve1(en_weer_heen_state.clone(),
+               &mut global_stats.clone());
+
+    println!("Amount en weer terug was {:?} ..",  amount_en_weer_heen);
+
+    amount_heen + amount_terug + amount_en_weer_heen
+}
+
+fn calculate_snowstorm_phase(mut state: State) -> usize {
+    let initial_state = state.blizzards.clone();
+    let mut iterations: usize = 0;
+    loop {
+        iterations = iterations + 1;
+        state = state.next_step(state.my_current_location.clone());
+        if state.blizzards == initial_state {
+            return iterations
+        }
+        assert!(iterations < 100000)
     }
 }
 
@@ -198,6 +238,8 @@ fn read_input(filename: &String) -> io::Result<State> {
     let problem_state = State {
         width,
         height,
+        moves_made: 0,
+        blown_blizzards: 0,
         walls,
         blizzards,
         my_current_location: start.as_ref().unwrap().clone(),
@@ -208,21 +250,30 @@ fn read_input(filename: &String) -> io::Result<State> {
     Ok(problem_state)
 }
 
+#[derive(Debug, Clone)]
 struct GlobalStats {
-    state_2_lb: HashMap<State, usize>,
-    state_2_solved_distance: HashMap<State, usize>,
+    state_2_lb: HashMap<(Point, usize), usize>,
+    state_2_known_distance: HashMap<(Point, usize), usize>,
     lb_for_points: HashMap<Point, usize>,
     global_lb: usize,
+    snowstorm_phase: usize,
 }
 
 impl GlobalStats {
-    fn new() -> Self {
+    fn new(snowstorm_phase: usize) -> Self {
         GlobalStats {
             state_2_lb: HashMap::new(),
-            state_2_solved_distance: HashMap::new(),
+            state_2_known_distance: HashMap::new(),
             lb_for_points: HashMap::new(),
             global_lb: usize::MAX,
+            snowstorm_phase,
         }
+    }
+
+    fn state_to_hash(&self,
+                     state: &State) -> (Point, usize) {
+        let effective_phase = state.blown_blizzards % self.snowstorm_phase;
+        return (state.my_current_location.clone(), effective_phase)
     }
 }
 
@@ -230,8 +281,10 @@ impl GlobalStats {
 struct State {
     width: i32,
     height: i32,
+    moves_made: usize,
     walls: BTreeSet<Point>,
     blizzards: BTreeSet<Blizzard>,
+    blown_blizzards: usize,
     my_current_location: Point,
     end: Point,
     start: Point,
@@ -313,10 +366,31 @@ impl State {
         next_blizzards
     }
 
-    fn next(&self, next_location: Point) -> Self  {
+    fn next_step(&self, next_location: Point) -> Self  {
         let mut next_state = self.clone();
         next_state.my_current_location = next_location;
         next_state.blizzards = self.calculate_next_blizzards();
+        next_state.blown_blizzards = self.blown_blizzards + 1;
+        next_state.moves_made = self.moves_made + 1;
+        next_state
+    }
+
+    fn let_blizzard_blow(&self) -> Self  {
+        let mut next_state = self.clone();
+        next_state.blizzards = self.calculate_next_blizzards();
+        next_state.blown_blizzards = self.blown_blizzards + 1;
+        next_state
+    }
+
+    fn reverse_start_and_end(&self) -> Self {
+        assert_eq!(self.my_current_location, self.start);
+        let old_start = self.start.clone();
+        let old_end = self.end.clone();
+
+        let mut next_state = self.clone();
+        next_state.my_current_location = old_end.clone();
+        next_state.start = old_end.clone();
+        next_state.end = old_start;
         next_state
     }
 
