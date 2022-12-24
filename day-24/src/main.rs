@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::collections::{BTreeSet, HashMap, HashSet};  // If we want to hash states we need order stuff
 use std::fs::File;
 use std::io::{self, BufReader, BufRead};
@@ -7,25 +8,44 @@ fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let initial_state = read_input(&args[1])?;
     let mut state_2_lb: HashMap<State, usize> = HashMap::new();
+    let mut state_2_solved_distance: HashMap<State, usize> = HashMap::new();
+    let mut lb_for_point: HashMap<Point, usize> = HashMap::new();
 
     println!("{:?} is the fewest number of minutes required to avoid the blizzards and reach the goal",
              solve1(initial_state.clone(),
                                0,
-                               &mut state_2_lb));
+                               &mut state_2_solved_distance,
+                               &mut state_2_lb,
+                    &mut lb_for_point));
 
     Ok(())
 }
 
 fn solve1(state: State,
           moves_made: usize,
-          state_2_lb: &mut HashMap<State, usize>) -> usize {
+          state_2_solved_distance: &mut HashMap<State, usize>,
+          state_2_lb: &mut HashMap<State, usize>,
+          lb_for_points: &mut HashMap<Point, usize>) -> usize {
 
-    let known_lb = *state_2_lb.get(&state).unwrap_or(&usize::MAX);
+    println!("Considering {:?}, moves_made {:?} ..", state.my_current_location, moves_made);
 
-    if known_lb < moves_made  {
+    if state_2_solved_distance.contains_key(&state) {
+        // println!("\tAlready solved {:?} ..", state.my_current_location);
+        return  *state_2_solved_distance.get(&state).unwrap()
+    }
+
+    let lb_for_point =
+        *lb_for_points.get(&state.my_current_location).unwrap_or(&usize::MAX);
+
+    if moves_made + state.distance_from_end_state() >= lb_for_point {
         return usize::MAX
     }
 
+    let known_lb = *state_2_lb.get(&state).unwrap_or(&usize::MAX);
+    if known_lb < moves_made  {
+        // println!("\tA better solution is already being calculated {:?} ..", state.my_current_location);
+        return usize::MAX
+    }
     state_2_lb.insert(state.clone(), moves_made);
 
     let mut children: Vec<State> = vec!();
@@ -33,34 +53,46 @@ fn solve1(state: State,
     let next_blizzard = state.calculate_next_blizzards();
 
     for possible_move in state.possible_moves() {
-
-        // println!("\tConsidering move {:?} ..", possible_move);
+        // println!("\t Considering move {:?} ..", possible_move);
         if next_blizzard.iter().any(|blizzard| blizzard.point == possible_move) {
-            // println!("\t\tIs in blizzard ..");
+            // println!("\t\t In blizzard :-( ..");
             continue
         }
 
         let next_state = state.next(possible_move);
 
-
         let known_lb = *state_2_lb.get(&next_state).unwrap_or(&usize::MAX);
-        if known_lb <= moves_made + 1  {
-            // println!("\t\tBetter LB known!");
+        if known_lb < moves_made   {
+            // println!("\t\t We have a quicker way to get there :-) ..");
             continue
         } else {
             state_2_lb.insert(next_state.clone(), moves_made + 1);
         }
 
         if next_state.in_end_state() {
-            // println!("\t\tFound a sollution!");
-            return moves_made + 1;
+            // println!("\t\t Solution found! :-) ..");
+
+            let answer = moves_made + 1;
+
+            state_2_solved_distance.insert( state.clone(), answer);
+
+            let lb_for_point =
+                *lb_for_points.get(&state.my_current_location).unwrap_or(&usize::MAX);
+
+            let lb_for_point = min(answer, lb_for_point);
+
+            lb_for_points.insert(state.my_current_location.clone(), lb_for_point);
+
+            return answer;
         }
 
         children.push(next_state)
     }
 
     if children.is_empty() {
-        state_2_lb.insert(state.clone(), 0);
+        // state_2_lb.insert(state.clone(), 0);
+        // println!("\t No children to evaluate :-) ..");
+        state_2_solved_distance.insert(state.clone(), usize::MAX);
         return usize::MAX
     } else {
 
@@ -70,17 +102,41 @@ fn solve1(state: State,
         }) ;
 
 
-        let min =
+        let min_distance =
             children.into_iter()
                     .map(|child| {
-                        solve1(child, moves_made + 1, state_2_lb)
+                        let answer =
+                            solve1(child.clone(),
+                                   moves_made + 1,
+                                   state_2_solved_distance,
+                                   state_2_lb,
+                                   lb_for_points);
+
+                        let lb_for_point =
+                            *lb_for_points.get(&child.my_current_location).unwrap_or(&usize::MAX);
+
+                        let lb_for_point = min(answer, lb_for_point);
+
+                        lb_for_points.insert(child.my_current_location.clone(), lb_for_point);
+
+                        state_2_solved_distance.insert(child, answer);
+
+                        answer
+
                     })
                     .min()
                     .unwrap();
 
-        state_2_lb.insert(state.clone(), min);
+        let lb_for_point =
+            *lb_for_points.get(&state.my_current_location).unwrap_or(&usize::MAX);
 
-        min
+        let lb_for_point = min(min_distance, lb_for_point);
+
+        lb_for_points.insert(state.my_current_location.clone(), lb_for_point);
+
+        state_2_solved_distance.insert(state.clone(), min_distance);
+
+        min_distance
     }
 }
 
