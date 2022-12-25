@@ -16,7 +16,7 @@ fn main() -> io::Result<()> {
     println!("{} is the decimal number we need", dec_output);
 
     println!("{} is the SNAFU number you supply to Bob's console",
-             enumerate_snafu(dec_output));
+             dec_to_big_endian_snafu(dec_output).iter().rev().collect::<String>());
 
     Ok(())
 }
@@ -40,48 +40,39 @@ fn snafu_2_dec(snafu: &Vec<char>) -> i64 {
         .sum()
 }
 
-// Yes extremly hacky, but the elves are getting cold and I am done for the year.
-fn enumerate_snafu(i : i64) -> String {
-    let mut rvalue: Vec<char> = vec!('0');
-    for x in 0..i {
-        println!("{x} / {i}");
-        let mut index = 0;
-        loop {
-            if index >= rvalue.len() {
-                rvalue.push('1');
-                break;
-            } else {
-                let (nchar, overflow) = snafu_adder(&rvalue[index]);
-                rvalue[index] = nchar;
-                index = index + 1;
-                if !overflow {
-                    break;
-                }
-            }
-        }
-    }
+fn dec_to_big_endian_snafu(dec: i64) -> Vec<char> {
+    if dec > 10 {
+        let quotient = dec / 2;
+        let remainder = dec % 2;
+        let snafu_quotient = dec_to_big_endian_snafu(quotient);
+        let snafu_remainder = dec_to_big_endian_snafu(remainder);
 
-    rvalue.into_iter().rev().collect::<String>()
+        let added_quotient =
+            add_two_big_endian_snafu_numbers(snafu_quotient.clone(),
+                                            snafu_quotient.clone());
+
+        add_two_big_endian_snafu_numbers(added_quotient,
+                                         snafu_remainder)
+
+    } else {
+        simple_dec_to_big_endian_snafu(dec)
+    }
 }
 
-// fn prefix_2_dec(prexix: String, i: u35) {
-    // let c = &prexix.chars()
-    // snafu_char_2_value()
-// }
-
 // Ok we have to put in the work
-fn dec_2_snafu(dec: i64) -> String {
+fn simple_dec_to_big_endian_snafu(dec: i64) -> Vec<char> {
     match dec {
-        0 => "0".to_string(),
-        1 => "1".to_string(),
-        2 => "2".to_string(),
-        3 => "1=".to_string(),
-        4 => "1-".to_string(),
-        5 => "10".to_string(),
-        6 => "11".to_string(),
-        7 => "12".to_string(),
-        8 => "2=".to_string(),
-        9 => "2-".to_string(),
+        0 => "0".to_string().chars().rev().collect::<Vec<char>>(),
+        1 => "1".to_string().chars().rev().collect::<Vec<char>>(),
+        2 => "2".to_string().chars().rev().collect::<Vec<char>>(),
+        3 => "1=".to_string().chars().rev().collect::<Vec<char>>(),
+        4 => "1-".to_string().chars().rev().collect::<Vec<char>>(),
+        5 => "10".to_string().chars().rev().collect::<Vec<char>>(),
+        6 => "11".to_string().chars().rev().collect::<Vec<char>>(),
+        7 => "12".to_string().chars().rev().collect::<Vec<char>>(),
+        8 => "2=".to_string().chars().rev().collect::<Vec<char>>(),
+        9 => "2-".to_string().chars().rev().collect::<Vec<char>>(),
+        10 => "20".to_string().chars().rev().collect::<Vec<char>>(),
         _ => panic!("Unexepected input")
     }
 }
@@ -116,16 +107,93 @@ fn snafu_adder(left: &char, right: &char) -> (char, Option<char>) {
                 '=' => ('0', None),
                 _ => panic!("Unexpected input")
             },
-        '=' => ('-', false),
-        '-' => ('0', false),
+        '=' =>
+            match right {
+                '2' => ('0', None),
+                '1' => ('-', None),
+                '0' => ('=', None),
+                '-' => ('2', Some('-')),
+                '=' => ('1', Some('-')),
+                _ => panic!("Unexpected input")
+            },
+        '-' =>
+            match right {
+                '2' => ('1', None),
+                '1' => ('0', None),
+                '0' => ('-', None),
+                '-' => ('=', None),
+                '=' => ('2', Some('-')),
+                _ => panic!("Unexpected input")
+            },
         _ => panic!("Unexpected input")
     }
 }
 
-// (a * 5^y) * 10 =>
-// 2a * 5^y+1
-fn shift_to_the_lef() {
+fn add_two_big_endian_snafu_numbers(left: Vec<char>,
+                                    right: Vec<char>) -> Vec<char> {
 
+    let mut rvalue: Vec<char> = vec!();
+
+    let (longest, shortest) =
+        if left.len() > right.len() {
+            (&left, &right)
+        } else {
+            (&right, &left)
+        }
+    ;
+
+    let mut carry: Option<char> = None;
+
+    for index in 0..(shortest.len()) {
+        let res = longest[index];
+
+        let (res, carry_) =
+            if carry.is_some() {
+                snafu_adder(&res, &carry.unwrap())
+            }  else {
+                (res, None)
+            }
+        ;
+        carry = carry_;
+
+        let right = right[index];
+
+        let (res, additional_carry) =
+            snafu_adder(&res, &right);
+
+        assert!(carry.is_none() || additional_carry.is_none());
+
+        rvalue.push(res);
+
+        carry =
+            if carry.is_some() {
+                carry
+            } else if additional_carry.is_some() {
+                additional_carry
+            } else {
+                None
+            }
+        ;
+    }
+
+    for index in shortest.len()..longest.len() {
+        let (res, carry_) =
+            if carry.is_some() {
+                snafu_adder(&longest[index], &carry.unwrap())
+            }  else {
+                (longest[index], None)
+            };
+        carry = carry_;
+        rvalue.push(res);
+    }
+
+    if carry.is_some() {
+        let carry = carry.unwrap();
+        assert!(carry != '=' && carry != '0' && carry != '-');
+        rvalue.push(carry);
+    }
+
+    rvalue
 }
 
 fn read_input(filename: &String) -> io::Result<Vec<Vec<char>>> {
