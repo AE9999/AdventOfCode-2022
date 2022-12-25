@@ -5,7 +5,6 @@ use std::collections::{BTreeSet, HashMap};  // If we want to hash states we need
 use std::fs::File;
 use std::io::{self, BufReader, BufRead};
 use std::env;
-use std::sync::atomic::Ordering::Release;
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -15,9 +14,9 @@ fn main() -> io::Result<()> {
 
     println!("The snowstorm phase for our problems is {:?} ", snowstorm_phase);
 
-    // println!("{:?} is the fewest number of minutes required to avoid the blizzards and reach the goal",
-    //          solve1(initial_state.clone(),
-    //             &mut GlobalStats::new(snowstorm_phase)));
+    println!("{:?} is the fewest number of minutes required to avoid the blizzards and reach the goal",
+             solve1(initial_state.clone(),
+                &mut GlobalStats::new(snowstorm_phase)));
 
     println!("{:?} is the fewest number of minutes required to reach the goal, go back to the start, then reach the goal again",
             solve2(initial_state.clone(),
